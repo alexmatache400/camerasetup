@@ -1,26 +1,293 @@
 @import "tailwindcss";
 
+/* ============================================
+   PROFESSIONAL PHOTO/VIDEO SOFTWARE THEME
+   Inspired by Lightroom & Capture One
+   ============================================ */
+
 :root {
+  /* Light Mode - Professional Photo Software Aesthetic */
+
+  /* Backgrounds */
+  --background-primary: #f5f5f5;
+  --background-secondary: #ffffff;
+  --surface: #ffffff;
+
+  /* Text Colors */
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-tertiary: #888888;
+
+  /* Semantic Colors */
+  --accent: #e85a24;
+  --accent-hover: #d14e1f;
+  --success: #2e7d32;
+  --error: #c62828;
+  --warning: #f57c00;
+  --info: #0277bd;
+
+  /* UI Elements */
+  --border: #e0e0e0;
+  --border-subtle: #f0f0f0;
+  --shadow: rgba(0, 0, 0, 0.08);
+  --shadow-strong: rgba(0, 0, 0, 0.12);
+  --overlay: rgba(0, 0, 0, 0.4);
+
+  /* Interactive States */
+  --hover-overlay: rgba(0, 0, 0, 0.05);
+  --active-overlay: rgba(0, 0, 0, 0.1);
+
+  /* Badge Colors (Professional Variants - Light) */
+  --badge-brand: #e85a24;
+  --badge-brand-from: #e85a24;
+  --badge-brand-via: #f07846;
+  --badge-brand-to: #f89668;
+
+  --badge-type: #7e57c2;
+  --badge-type-from: #5e35b1;
+  --badge-type-via: #7e57c2;
+  --badge-type-to: #9575cd;
+
+  --badge-price: #43a047;
+  --badge-price-from: #2e7d32;
+  --badge-price-via: #43a047;
+  --badge-price-to: #66bb6a;
+
+  --badge-new: #e53935;
+  --badge-new-from: #c62828;
+  --badge-new-via: #e53935;
+  --badge-new-to: #ef5350;
+
+  /* Legacy support (for existing code) */
   --background: #ffffff;
   --foreground: #171717;
 }
 
+.dark {
+  /* Dark Mode - Professional Photo/Video Software Aesthetic */
+
+  /* Backgrounds */
+  --background-primary: #1a1a1a;
+  --background-secondary: #0d0d0d;
+  --surface: #2d2d2d;
+
+  /* Text Colors */
+  --text-primary: #e5e5e5;
+  --text-secondary: #888888;
+  --text-tertiary: #666666;
+
+  /* Semantic Colors */
+  --accent: #ff6b35;
+  --accent-hover: #ff8555;
+  --success: #4caf50;
+  --error: #ef5350;
+  --warning: #ffa726;
+  --info: #29b6f6;
+
+  /* UI Elements */
+  --border: #3d3d3d;
+  --border-subtle: #2a2a2a;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-strong: rgba(0, 0, 0, 0.5);
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  /* Interactive States */
+  --hover-overlay: rgba(255, 255, 255, 0.05);
+  --active-overlay: rgba(255, 255, 255, 0.1);
+
+  /* Badge Colors (Professional Variants - Dark) */
+  --badge-brand: #ff6b35;
+  --badge-brand-from: #ff6b35;
+  --badge-brand-via: #ff8555;
+  --badge-brand-to: #ffa075;
+
+  --badge-type: #9575cd;
+  --badge-type-from: #7e57c2;
+  --badge-type-via: #9575cd;
+  --badge-type-to: #b39ddb;
+
+  --badge-price: #66bb6a;
+  --badge-price-from: #4caf50;
+  --badge-price-via: #66bb6a;
+  --badge-price-to: #81c784;
+
+  --badge-new: #ef5350;
+  --badge-new-from: #e53935;
+  --badge-new-via: #ef5350;
+  --badge-new-to: #f44336;
+
+  /* Legacy support */
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+/* ============================================
+   TAILWIND V4 THEME INTEGRATION
+   Maps CSS variables to Tailwind utilities
+   ============================================ */
+
 @theme inline {
+  /* Backgrounds */
+  --color-background-primary: var(--background-primary);
+  --color-background-secondary: var(--background-secondary);
+  --color-surface: var(--surface);
+
+  /* Text */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  /* Semantic */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  /* UI Elements */
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+
+  /* Badge Colors */
+  --color-badge-brand: var(--badge-brand);
+  --color-badge-brand-from: var(--badge-brand-from);
+  --color-badge-brand-via: var(--badge-brand-via);
+  --color-badge-brand-to: var(--badge-brand-to);
+
+  --color-badge-type: var(--badge-type);
+  --color-badge-type-from: var(--badge-type-from);
+  --color-badge-type-via: var(--badge-type-via);
+  --color-badge-type-to: var(--badge-type-to);
+
+  --color-badge-price: var(--badge-price);
+  --color-badge-price-from: var(--badge-price-from);
+  --color-badge-price-via: var(--badge-price-via);
+  --color-badge-price-to: var(--badge-price-to);
+
+  --color-badge-new: var(--badge-new);
+  --color-badge-new-from: var(--badge-new-from);
+  --color-badge-new-via: var(--badge-new-via);
+  --color-badge-new-to: var(--badge-new-to);
+
+  /* Legacy support */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ============================================
+   UTILITY CLASSES
+   Common patterns for consistency
+   ============================================ */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--background-primary);
+  color: var(--text-primary);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Surface Card Pattern */
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+/* Glass Effect Pattern */
+.glass {
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Hover States */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px var(--shadow-strong);
+}
+
+/* Accent Button Pattern */
+.btn-accent {
+  background: var(--accent);
+  color: white;
+  border: none;
+  transition: background 0.2s ease;
+}
+
+.btn-accent:hover {
+  background: var(--accent-hover);
+}
+
+/* Text Gradients */
+.text-gradient-accent {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============================================
+   RESPONSIVE FLUID TYPOGRAPHY
+   Scales smoothly across all viewport sizes
+   ============================================ */
+
+.text-fluid-4xl {
+  font-size: clamp(1.75rem, 4vw + 1rem, 2.25rem);
+  /* 28px → 36px (mobile → desktop) */
+}
+
+.text-fluid-3xl {
+  font-size: clamp(1.5rem, 3vw + 0.75rem, 1.875rem);
+  /* 24px → 30px */
+}
+
+.text-fluid-2xl {
+  font-size: clamp(1.25rem, 2.5vw + 0.5rem, 1.5rem);
+  /* 20px → 24px */
+}
+
+.text-fluid-xl {
+  font-size: clamp(1.125rem, 2vw + 0.25rem, 1.25rem);
+  /* 18px → 20px */
+}
+
+.text-fluid-lg {
+  font-size: clamp(1rem, 1.5vw + 0.25rem, 1.125rem);
+  /* 16px → 18px */
+}
+
+.text-fluid-base {
+  font-size: clamp(0.875rem, 1vw + 0.25rem, 1rem);
+  /* 14px → 16px */
+}
+
+/* ============================================
+   RESPONSIVE SPACING UTILITIES
+   Adapts padding/margins based on viewport
+   ============================================ */
+
+.px-fluid {
+  padding-left: clamp(1rem, 2vw, 2rem);   /* 16px → 32px */
+  padding-right: clamp(1rem, 2vw, 2rem);
+}
+
+.py-fluid {
+  padding-top: clamp(1.5rem, 3vw, 3rem);   /* 24px → 48px */
+  padding-bottom: clamp(1.5rem, 3vw, 3rem);
+}
+
+.gap-fluid {
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);      /* 12px → 24px */
+}
+
+.mt-fluid {
+  margin-top: clamp(1rem, 2vw, 2rem);      /* 16px → 32px */
 }

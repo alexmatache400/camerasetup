@@ -39,3 +39,23 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Claude instruction files
+CLAUDE.md
+Claude 3.md
+CLAUDE 2.md
+
+# IDE
+.idea/
+
+# Documentation files (development only)
+BADGE_3D_GUIDE.md
+BUG_FIX_SUMMARY.md
+BUG_FIX_TESTING.md
+CAROUSEL_UPDATE.md
+ActivitySetup3D.md
+
+# Lock files (using npm)
+pnpm-lock.yaml
+
+# Large video files (use external hosting)
+public/videoBackground/*.mp4
