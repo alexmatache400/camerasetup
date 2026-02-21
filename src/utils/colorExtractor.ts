@@ -8,6 +8,13 @@ export interface ColorPalette {
   imageUrl: string;
 }
 
+export const FALLBACK_COLORS: string[] = [
+  'rgba(100, 120, 180, 0.7)',
+  'rgba(150, 100, 180, 0.7)',
+  'rgba(180, 120, 100, 0.7)',
+  'rgba(120, 180, 150, 0.7)',
+];
+
 /**
  * Extracts dominant colors from an image
  * @param imageSrc - Image URL or path
@@ -138,12 +145,7 @@ export async function extractColorPalettes(
       console.error(`Failed to extract colors from ${imageSrc}:`, error);
       // Return fallback colors
       return {
-        colors: [
-          'rgba(100, 120, 180, 0.7)',
-          'rgba(150, 100, 180, 0.7)',
-          'rgba(180, 120, 100, 0.7)',
-          'rgba(120, 180, 150, 0.7)',
-        ],
+        colors: FALLBACK_COLORS,
         imageUrl: imageSrc,
       };
     }

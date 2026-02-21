@@ -5,40 +5,19 @@ import { Mail, Camera } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer
-      className="border-t mt-16"
-      style={{
-        borderColor: "var(--border)",
-        background: "var(--surface)",
-      }}
-    >
+    <footer className="border-t border-border bg-surface mt-16">
       <div className="max-w-6xl mx-auto px-4 py-12">
         {/* Main Footer Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           {/* Company Info */}
           <div>
-            <Link
-              href="/"
-              className="flex items-center gap-2 mb-4 group"
-            >
-              <Camera
-                size={24}
-                style={{ color: "var(--accent)" }}
-              />
-              <span
-                className="text-lg font-semibold"
-                style={{
-                  fontFamily: "var(--font-montserrat)",
-                  color: "var(--text-primary)",
-                }}
-              >
+            <Link href="/" className="flex items-center gap-2 mb-4 group">
+              <Camera size={24} className="text-accent" />
+              <span className="text-lg font-semibold font-montserrat text-text-primary">
                 CameraSetup
               </span>
             </Link>
-            <p
-              className="text-sm mb-4"
-              style={{ color: "var(--text-secondary)" }}
-            >
+            <p className="text-sm mb-4 text-text-secondary">
               Your trusted resource for expert camera recommendations and
               activity-specific setup guides. We help you find the perfect gear
               for your creative journey.
@@ -47,27 +26,14 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h3
-              className="font-semibold mb-4"
-              style={{
-                fontFamily: "var(--font-montserrat)",
-                color: "var(--text-primary)",
-              }}
-            >
+            <h3 className="font-semibold mb-4 font-montserrat text-text-primary">
               Quick Links
             </h3>
             <ul className="space-y-2">
               <li>
                 <Link
                   href="/"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Home
                 </Link>
@@ -75,14 +41,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/product"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Products
                 </Link>
@@ -90,14 +49,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/activity-setup"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Activity Setup
                 </Link>
@@ -105,14 +57,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/about"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   About Us
                 </Link>
@@ -122,27 +67,14 @@ export default function Footer() {
 
           {/* Legal */}
           <div>
-            <h3
-              className="font-semibold mb-4"
-              style={{
-                fontFamily: "var(--font-montserrat)",
-                color: "var(--text-primary)",
-              }}
-            >
+            <h3 className="font-semibold mb-4 font-montserrat text-text-primary">
               Legal
             </h3>
             <ul className="space-y-2">
               <li>
                 <Link
                   href="/legal/terms"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Terms of Service
                 </Link>
@@ -150,14 +82,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/legal/privacy"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Privacy Policy
                 </Link>
@@ -165,14 +90,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/legal/cookies"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Cookie Policy
                 </Link>
@@ -180,14 +98,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/legal/affiliate"
-                  className="text-sm transition-colors duration-200"
-                  style={{ color: "var(--text-secondary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
                 >
                   Affiliate Disclosure
                 </Link>
@@ -197,31 +108,14 @@ export default function Footer() {
 
           {/* Contact */}
           <div>
-            <h3
-              className="font-semibold mb-4"
-              style={{
-                fontFamily: "var(--font-montserrat)",
-                color: "var(--text-primary)",
-              }}
-            >
+            <h3 className="font-semibold mb-4 font-montserrat text-text-primary">
               Contact
             </h3>
             <div className="flex items-start gap-2">
-              <Mail
-                size={18}
-                className="mt-0.5 flex-shrink-0"
-                style={{ color: "var(--accent)" }}
-              />
+              <Mail size={18} className="mt-0.5 flex-shrink-0 text-accent" />
               <a
                 href="mailto:contact@camerasetup.com"
-                className="text-sm transition-colors duration-200"
-                style={{ color: "var(--text-secondary)" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--text-secondary)";
-                }}
+                className="text-sm transition-colors duration-200 text-text-secondary hover:text-accent"
               >
                 contact@camerasetup.com
               </a>
@@ -230,14 +124,8 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div
-          className="pt-8 border-t flex justify-center items-center"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <p
-            className="text-sm"
-            style={{ color: "var(--text-tertiary)" }}
-          >
+        <div className="pt-8 border-t border-border flex justify-center items-center">
+          <p className="text-sm text-text-tertiary">
             © {new Date().getFullYear()} CameraSetup. All rights reserved.
           </p>
         </div>

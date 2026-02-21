@@ -5,6 +5,7 @@ import { Geist, Geist_Mono, Montserrat } from "next/font/google";
 import TopBar from "@/components/TopBar";
 import Footer from "@/components/Footer";
 import CookieConsent from "@/components/CookieConsent";
+import { SidebarOffsetProvider } from "@/contexts/SidebarOffsetContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,10 +46,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <TopBar />
-          {children}
-          <Footer />
-          <CookieConsent />
+          <SidebarOffsetProvider>
+            <TopBar />
+            {children}
+            <Footer />
+            <CookieConsent />
+          </SidebarOffsetProvider>
         </ThemeProvider>
       </body>
     </html>

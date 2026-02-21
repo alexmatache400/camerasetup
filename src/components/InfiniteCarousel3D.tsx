@@ -1,6 +1,11 @@
 'use client';
 
-import React, { useRef, useEffect, useState, ReactNode, forwardRef, useImperativeHandle } from 'react';
+import React, {
+  useRef, useEffect, useState, useCallback,
+  ReactNode, forwardRef, useImperativeHandle,
+} from 'react';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface InfiniteCarousel3DProps {
   children: ReactNode[];
@@ -8,8 +13,8 @@ interface InfiniteCarousel3DProps {
   cardWidth?: number;
   cardGap?: number;
   className?: string;
-  autoPlaySpeed?: number; // Auto-play scroll speed
-  autoPlayDelay?: number; // Delay before auto-play starts (ms)
+  autoPlaySpeed?: number;
+  autoPlayDelay?: number;
 }
 
 export interface InfiniteCarousel3DHandle {
@@ -17,639 +22,523 @@ export interface InfiniteCarousel3DHandle {
   resume: () => void;
 }
 
-// Configuration constants
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const CONFIG = {
-  MAX_ROTATION: 28, // Y-axis rotation in degrees
-  MAX_DEPTH: 140, // Z-translation in pixels
-  MIN_SCALE: 0.8, // Minimum scale for distant cards
-  FRICTION: 0.9, // Velocity decay rate (0-1)
-  WHEEL_SENS: 0.6, // Mouse wheel sensitivity
-  DRAG_SENS: 1.2, // Touch/mouse drag sensitivity
-  PERSPECTIVE: 1200, // Perspective distance in pixels
-  VELOCITY_THRESHOLD: 0.01, // Minimum velocity before clamping to zero
-  AUTO_PLAY_SPEED: 1.5, // Default auto-play velocity
-  AUTO_PLAY_DELAY: 100, // 0.1 seconds
-  SCROLL_THRESHOLD: 1.5, // Ratio threshold for detecting horizontal scroll intent
+  MAX_ROTATION: 28,
+  MAX_DEPTH: 140,
+  MIN_SCALE: 0.8,
+  FRICTION: 0.9,
+  WHEEL_SENS: 0.6,
+  DRAG_SENS: 1.2,
+  PERSPECTIVE: 1200,
+  VELOCITY_THRESHOLD: 0.01,
+  AUTO_PLAY_SPEED: 1.5,
+  AUTO_PLAY_DELAY: 3000,
+  SCROLL_THRESHOLD: 1.5,
+  DRAG_THRESHOLD: 5,
+} as const;
+
+const CARD_ASPECT_RATIO = 850 / 600;
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+
+const calculateTransform = (dist: number, cardSpacing: number) => {
+  const nd = dist / cardSpacing;
+  return {
+    rotation: -nd * CONFIG.MAX_ROTATION,
+    depth:    -Math.abs(nd) * CONFIG.MAX_DEPTH,
+    scale:     1 - Math.abs(nd) * (1 - CONFIG.MIN_SCALE),
+    opacity:   Math.max(0.3, 1 - Math.abs(nd) * 0.7),
+  };
 };
 
-/**
- * InfiniteCarousel3D Component
- * Creates a 3D infinite carousel with velocity-based scrolling and auto-play
- */
-const InfiniteCarousel3D = forwardRef<InfiniteCarousel3DHandle, InfiniteCarousel3DProps>(({
-  children,
-  onActiveIndexChange,
-  cardWidth = 650,
-  cardGap = 100,
-  className = '',
-  autoPlaySpeed = CONFIG.AUTO_PLAY_SPEED,
-  autoPlayDelay = CONFIG.AUTO_PLAY_DELAY,
-}, ref) => {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const InfiniteCarousel3D = forwardRef<InfiniteCarousel3DHandle, InfiniteCarousel3DProps>((
+  {
+    children,
+    onActiveIndexChange,
+    cardWidth    = 650,
+    cardGap      = 100,
+    className    = '',
+    autoPlaySpeed = CONFIG.AUTO_PLAY_SPEED,
+    autoPlayDelay = CONFIG.AUTO_PLAY_DELAY,
+  },
+  ref,
+) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement[]>([]);
-  const velocityRef = useRef(0);
-  const scrollXRef = useRef(0);
-  const lastTimeRef = useRef(Date.now());
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const isDraggingRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, scrollX: 0 });
 
-  // Auto-play state
-  const lastInteractionRef = useRef(Date.now());
-  const isAutoPlayingRef = useRef(false);
-  const isHoveredRef = useRef(false);
-  const hoveredCardIndexRef = useRef<number | null>(null);
-  const isPausedRef = useRef(false);
-
-  // Previous positions for wrap detection
-  const prevPositionsRef = useRef<number[]>([]);
-
-  // Store animate function for resume
+  const rafRef      = useRef<number | undefined>(undefined);
   const animateFnRef = useRef<(() => void) | null>(null);
 
-  // Auto-scroll to center target
-  const targetCardIndexRef = useRef<number | null>(null);
+  const engine = useRef({
+    scrollX:          0,
+    velocity:         0,
+    lastTime:         0,
+    lastInteractionTime: 0,
 
-  const totalCards = children.length;
+    isAutoPlaying:    false,
+    isHovered:        false,
+
+    // Drag state: mousedown records the start position but does NOT set
+    // isDragging. We only enter drag mode when movement exceeds DRAG_THRESHOLD.
+    // This prevents mousedown from interfering with simple clicks.
+    isPointerDown:    false,
+    isDragging:       false,
+    wasDragging:      false,
+
+    pointerStartX:    0,
+    pointerStartScrollX: 0,
+
+    targetCardIndex:  null as number | null,
+    focusedCardIndex: null as number | null,
+
+    prevPositions:    [] as number[],
+    isPaused:         false,
+    activeIndex:      0,
+  });
+
+  const totalCards  = children.length;
   const cardSpacing = cardWidth + cardGap;
   const trackLength = cardSpacing * totalCards;
 
-  // Reset interaction timer
-  const resetInteractionTimer = () => {
-    lastInteractionRef.current = Date.now();
-    isAutoPlayingRef.current = false;
-  };
+  const configRef = useRef({ totalCards, cardSpacing, trackLength, autoPlaySpeed, autoPlayDelay, cardWidth });
+  configRef.current = { totalCards, cardSpacing, trackLength, autoPlaySpeed, autoPlayDelay, cardWidth };
 
-  // Handle card background click to center
-  const handleCardBackgroundClick = (index: number, e: React.MouseEvent) => {
-    // Don't center if clicking on interactive elements
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'BUTTON' || target.closest('button')) return;
-    if (target.tagName === 'A' || target.closest('a')) return;
-    if (target.tagName === 'INPUT' || target.closest('input')) return;
+  const onActiveIndexChangeRef = useRef(onActiveIndexChange);
+  onActiveIndexChangeRef.current = onActiveIndexChange;
 
-    // Set target card to smoothly scroll toward center
-    targetCardIndexRef.current = index;
-    isAutoPlayingRef.current = false;
-  };
+  const [reactiveActiveIndex, setReactiveActiveIndex] = useState(0);
+  const activeIndexTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Expose pause/resume methods via ref
+  // ── pause / resume ────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     pause: () => {
-      isPausedRef.current = true;
-      isAutoPlayingRef.current = false;
-      velocityRef.current = 0;
-
-      // Cancel the animation frame to stop the loop
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = undefined;
+      const e = engine.current;
+      e.isPaused      = true;
+      e.isAutoPlaying = false;
+      e.velocity      = 0;
+      if (rafRef.current !== undefined) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = undefined;
       }
     },
     resume: () => {
-      isPausedRef.current = false;
-      lastInteractionRef.current = Date.now();
-      lastTimeRef.current = Date.now(); // Reset time to avoid huge delta
-
-      // Restart animation loop if it was stopped
-      if (animateFnRef.current && !animationFrameRef.current) {
+      const e  = engine.current;
+      e.isPaused = false;
+      const now  = performance.now();
+      e.lastTime             = now;
+      e.lastInteractionTime  = now;
+      if (animateFnRef.current && rafRef.current === undefined) {
         animateFnRef.current();
       }
     },
   }));
 
-  // Modulo function that handles negative numbers correctly
-  const mod = (n: number, m: number) => ((n % m) + m) % m;
+  // ── updateCardPositions ─────────────────────────────────────────────────────
+  const updateCardPositions = useCallback(() => {
+    const e   = engine.current;
+    const cfg = configRef.current;
+    const stage = stageRef.current;
+    if (!stage || cfg.totalCards === 0) return;
 
-  // Calculate 3D transform properties based on distance from center
-  const calculateTransform = (distanceFromCenter: number) => {
-    // Normalize distance
-    const normalizedDist = distanceFromCenter / cardSpacing;
+    const stageWidth = stage.offsetWidth;
+    const centerX    = stageWidth / 2;
 
-    // Calculate rotation (peaks at ±MAX_ROTATION)
-    const rotation = -normalizedDist * CONFIG.MAX_ROTATION;
-
-    // Calculate depth (farther cards move back in Z)
-    const depth = -Math.abs(normalizedDist) * CONFIG.MAX_DEPTH;
-
-    // Calculate scale (farther cards get smaller)
-    const scale =
-      1 - Math.abs(normalizedDist) * (1 - CONFIG.MIN_SCALE);
-
-    // Calculate opacity (farther cards fade out)
-    const opacity = Math.max(0.3, 1 - Math.abs(normalizedDist) * 0.7);
-
-    return { rotation, depth, scale, opacity };
-  };
-
-  // Find closest card to center for better z-index distribution
-  const findClosestCardDistance = () => {
-    if (!stageRef.current) return 0;
-
-    const stageWidth = stageRef.current.offsetWidth;
-    const centerX = stageWidth / 2;
-    let minDistance = Infinity;
-
-    for (let index = 0; index < totalCards; index++) {
-      const basePosition = index * cardSpacing;
-      const wrappedPosition = mod(basePosition - scrollXRef.current, trackLength);
-
-      let adjustedPosition = wrappedPosition;
-      if (adjustedPosition > trackLength / 2) {
-        adjustedPosition -= trackLength;
-      }
-
-      const distanceFromCenter = Math.abs(adjustedPosition - centerX + cardWidth / 2);
-      minDistance = Math.min(minDistance, distanceFromCenter);
-    }
-
-    return minDistance;
-  };
-
-  // Apply transforms to all cards with improved z-index
-  const updateCardPositions = () => {
-    if (!stageRef.current) return;
-    if (totalCards === 0) return; // Guard against empty carousel
-
-    const stageWidth = stageRef.current.offsetWidth;
-    const centerX = stageWidth / 2;
-    let closestDistance = Infinity;
-    let newActiveIndex = activeIndex;
-
-    // Special handling for single card - center it perfectly with no transforms
-    if (totalCards === 1) {
+    if (cfg.totalCards === 1) {
       const card = cardsRef.current[0];
       if (card) {
-        // Position card at viewport center (left edge of card at centerX - cardWidth/2)
-        const centeredPosition = centerX - cardWidth / 2;
-
-        // Apply simple centered transform with no 3D effects
-        card.style.transform = `translateX(${centeredPosition}px)`;
-        card.style.opacity = '1'; // Full opacity - fully visible
-        card.style.zIndex = '1000'; // High z-index
-        card.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
-
-        // Initialize prevPositions if needed
-        if (prevPositionsRef.current.length === 0) {
-          prevPositionsRef.current = [centeredPosition];
-        }
-
-        // Set active index to 0 (only one card)
-        if (activeIndex !== 0) {
-          setActiveIndex(0);
-          onActiveIndexChange?.(0);
+        const x = centerX - cfg.cardWidth / 2;
+        card.style.visibility = 'visible';
+        card.style.transform  = `translateX(${x}px) translateY(-50%)`;
+        card.style.opacity    = '1';
+        card.style.zIndex     = '1000';
+        card.style.transition = 'transform 0.15s ease-out';
+        const inner = card.firstElementChild as HTMLElement | null;
+        if (inner) inner.style.pointerEvents = 'auto';
+        if (e.prevPositions.length === 0) e.prevPositions = [x];
+        if (e.activeIndex !== 0) {
+          e.activeIndex = 0;
+          clearTimeout(activeIndexTimerRef.current);
+          activeIndexTimerRef.current = setTimeout(() => {
+            setReactiveActiveIndex(0);
+            onActiveIndexChangeRef.current?.(0);
+          }, 50);
         }
       }
-      return; // Skip all the complex wrapping logic
-    }
-
-    // Initialize previous positions array on first run with actual starting positions
-    if (prevPositionsRef.current.length === 0) {
-      prevPositionsRef.current = new Array(totalCards).fill(0).map((_, idx) => {
-        const basePosition = idx * cardSpacing;
-        const wrappedPosition = mod(basePosition - scrollXRef.current, trackLength);
-        return wrappedPosition > trackLength / 2
-          ? wrappedPosition - trackLength
-          : wrappedPosition;
-      });
-    }
-
-    cardsRef.current.forEach((card, index) => {
-      if (!card) return;
-
-      // Calculate card's position in the infinite loop
-      const basePosition = index * cardSpacing;
-      const wrappedPosition = mod(
-        basePosition - scrollXRef.current,
-        trackLength
-      );
-
-      // Adjust position to center around viewport
-      let adjustedPosition = wrappedPosition;
-      if (adjustedPosition > trackLength / 2) {
-        adjustedPosition -= trackLength;
-      }
-
-      // Detect position wrapping by comparing with previous frame
-      // Wraps cause position changes > trackLength/3 (e.g., -400px → 3100px)
-      // This prevents visible transitions during infinite loop wrap-around
-      const prevPosition = prevPositionsRef.current[index];
-      const positionDelta = Math.abs(adjustedPosition - prevPosition);
-      const isWrapping = positionDelta > trackLength / 3;
-
-      // Store current position for next frame
-      prevPositionsRef.current[index] = adjustedPosition;
-
-      // Distance from center of viewport
-      const distanceFromCenter = adjustedPosition - centerX + cardWidth / 2;
-      const absoluteDistance = Math.abs(distanceFromCenter);
-
-      // Track closest card
-      if (absoluteDistance < closestDistance) {
-        closestDistance = absoluteDistance;
-        newActiveIndex = index;
-      }
-
-      // Calculate transform properties
-      const { rotation, depth, scale, opacity } =
-        calculateTransform(distanceFromCenter);
-
-      // Improved z-index calculation: base 1000, subtract squared normalized distance
-      // This creates smoother z-index transitions and prevents visual "jumps"
-      const normalizedDistance = absoluteDistance / (stageWidth / 2);
-      const zIndex = Math.round(1000 - normalizedDistance * normalizedDistance * 500);
-
-      // Enhanced transition logic: disable for wrapping cards and distant cards
-      // Tightened threshold from stageWidth to 0.75x for better edge card handling
-      const shouldHaveTransition =
-        !isDraggingRef.current &&
-        !isWrapping &&
-        absoluteDistance < stageWidth * 0.75;
-
-      // Apply transforms
-      card.style.transform = `
-        translateX(${adjustedPosition}px)
-        perspective(${CONFIG.PERSPECTIVE}px)
-        rotateY(${rotation}deg)
-        translateZ(${depth}px)
-        scale(${scale})
-      `;
-      card.style.opacity = String(opacity);
-      card.style.zIndex = String(zIndex);
-
-      // Conditionally apply transitions
-      if (shouldHaveTransition) {
-        card.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
-      } else {
-        card.style.transition = 'none';
-      }
-    });
-
-    // Update active index
-    if (newActiveIndex !== activeIndex) {
-      setActiveIndex(newActiveIndex);
-      onActiveIndexChange?.(newActiveIndex);
-    }
-  };
-
-  // Initialize carousel with first card centered on mount
-  useEffect(() => {
-    if (!stageRef.current) return;
-
-    // Special handling for single card - keep at position 0 to avoid wrapping issues
-    if (totalCards === 1) {
-      scrollXRef.current = 0;
-      lastInteractionRef.current = Date.now();
       return;
     }
 
-    const stageWidth = stageRef.current.offsetWidth;
-    const centerX = stageWidth / 2;
+    if (e.prevPositions.length === 0) {
+      e.prevPositions = Array.from({ length: cfg.totalCards }, (_, i) => {
+        const p = mod(i * cfg.cardSpacing - e.scrollX, cfg.trackLength);
+        return p > cfg.trackLength / 2 ? p - cfg.trackLength : p;
+      });
+    }
 
-    // Calculate scroll position to center card 0 (first card)
-    // Uses same formula as click-to-center: (cardIndex × cardSpacing) - centerX + (cardWidth / 2)
-    const initialScrollX = (0 * cardSpacing) - centerX + (cardWidth / 2);
+    let closestDist    = Infinity;
+    let newActiveIndex = e.activeIndex;
 
-    // Set initial scroll position to center the first card
-    scrollXRef.current = mod(initialScrollX, trackLength);
+    for (let index = 0; index < cfg.totalCards; index++) {
+      const card = cardsRef.current[index];
+      if (!card) continue;
 
-    // Delay auto-play start by resetting interaction timer
-    lastInteractionRef.current = Date.now();
-  }, []); // Run once on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      let pos = mod(index * cfg.cardSpacing - e.scrollX, cfg.trackLength);
+      if (pos > cfg.trackLength / 2) pos -= cfg.trackLength;
 
-  // Animation loop with velocity-based scrolling and auto-play
-  useEffect(() => {
-    const animate = () => {
-      const now = Date.now();
-      const dt = (now - lastTimeRef.current) / 1000; // Delta time in seconds
-      lastTimeRef.current = now;
+      const prevPos   = e.prevPositions[index] ?? pos;
+      const isWrapping = Math.abs(pos - prevPos) > cfg.trackLength / 3;
+      e.prevPositions[index] = pos;
 
-      // Skip animation if paused
-      if (isPausedRef.current) {
-        return; // Don't request next frame - loop stops here
+      const dist    = pos - centerX + cfg.cardWidth / 2;
+      const absDist = Math.abs(dist);
+
+      if (absDist < closestDist) {
+        closestDist    = absDist;
+        newActiveIndex = index;
       }
 
-      // Handle auto-scroll to center target card
-      if (targetCardIndexRef.current !== null && stageRef.current) {
-        const stageWidth = stageRef.current.offsetWidth;
-        const centerX = stageWidth / 2;
+      const { rotation, depth, scale: baseScale, opacity } =
+        calculateTransform(dist, cfg.cardSpacing);
 
-        // Calculate scroll position to center the card
-        // The card's center should align with the viewport center
-        const targetScrollX = (targetCardIndexRef.current * cardSpacing)
-                              - centerX
-                              + (cardWidth / 2);
-
-        const currentScrollX = scrollXRef.current;
-
-        // Calculate shortest path considering infinite loop
-        let delta = targetScrollX - currentScrollX;
-
-        // Adjust for wrapping (find shortest distance)
-        if (delta > trackLength / 2) {
-          delta -= trackLength;
-        } else if (delta < -trackLength / 2) {
-          delta += trackLength;
+      let finalScale = baseScale;
+      if (e.focusedCardIndex === index) {
+        const centeredness = 1 - Math.min(absDist / (cfg.cardSpacing * 0.5), 1);
+        if (centeredness > 0) {
+          const cardNaturalH = cfg.cardWidth * CARD_ASPECT_RATIO;
+          const maxScale     = Math.min((stage.offsetHeight * 0.95) / cardNaturalH, 1.5);
+          finalScale = baseScale + (maxScale - baseScale) * centeredness;
         }
+      }
 
-        // Smooth easing towards target (0.15 = easing factor)
-        velocityRef.current = delta * 0.15;
+      const nd     = absDist / (stageWidth / 2);
+      const zIndex = Math.round(1000 - nd * nd * 500);
 
-        // Apply velocity
-        scrollXRef.current = mod(
-          scrollXRef.current + velocityRef.current * dt * 60,
-          trackLength
-        );
+      const hasTransition =
+        !e.isDragging && !isWrapping && absDist < stageWidth * 0.75;
 
-        // If close enough to target, clear it (allow normal scrolling)
+      card.style.visibility = 'visible';
+      card.style.transform  = `translateX(${pos}px) translateY(-50%) perspective(${CONFIG.PERSPECTIVE}px) rotateY(${rotation}deg) translateZ(${depth}px) scale(${finalScale})`;
+      card.style.opacity    = String(opacity);
+      card.style.zIndex     = String(zIndex);
+      card.style.transition = hasTransition
+        ? 'transform 0.15s ease-out, opacity 0.15s ease-out'
+        : 'none';
+
+      // Pointer-events on inner wrapper:
+      // - 'auto' on the centred card so buttons/links are clickable
+      // - 'none' on non-centred cards so clicks fall through to the outer
+      //   wrapper which has the onClick handler for click-to-centre
+      const inner = card.firstElementChild as HTMLElement | null;
+      if (inner) inner.style.pointerEvents = index === newActiveIndex ? 'auto' : 'none';
+    }
+
+    if (newActiveIndex !== e.activeIndex) {
+      e.activeIndex = newActiveIndex;
+      clearTimeout(activeIndexTimerRef.current);
+      activeIndexTimerRef.current = setTimeout(() => {
+        setReactiveActiveIndex(newActiveIndex);
+        onActiveIndexChangeRef.current?.(newActiveIndex);
+      }, 50);
+    }
+  }, []);
+
+  // ── Animation loop ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const animate = () => {
+      const e   = engine.current;
+      const cfg = configRef.current;
+      if (e.isPaused) return;
+
+      const now = performance.now();
+      const dt  = Math.min((now - e.lastTime) / 1000, 0.1);
+      e.lastTime = now;
+
+      // Phase 1 – smooth-scroll to a target card
+      if (e.targetCardIndex !== null && stageRef.current) {
+        const sw = stageRef.current.offsetWidth;
+        const cx = sw / 2;
+        const targetScrollX = e.targetCardIndex * cfg.cardSpacing - cx + cfg.cardWidth / 2;
+        let delta = targetScrollX - e.scrollX;
+        if (delta >  cfg.trackLength / 2) delta -= cfg.trackLength;
+        if (delta < -cfg.trackLength / 2) delta += cfg.trackLength;
+
+        e.velocity = delta * 0.15;
+        e.scrollX  = mod(e.scrollX + e.velocity * dt * 60, cfg.trackLength);
+
         if (Math.abs(delta) < 1) {
-          targetCardIndexRef.current = null;
-          velocityRef.current = 0;
+          e.targetCardIndex = null;
+          e.velocity        = 0;
         }
 
-        // Update card positions and skip other logic
         updateCardPositions();
-        animationFrameRef.current = requestAnimationFrame(animate);
+        rafRef.current = requestAnimationFrame(animate);
         return;
       }
 
-      // Check if auto-play should be enabled
-      const timeSinceInteraction = now - lastInteractionRef.current;
-      const shouldAutoPlay =
-        totalCards > 1 && // Disable auto-play for single card (prevents pointless wrapping)
-        !isPausedRef.current &&
-        !isHoveredRef.current &&
-        !isDraggingRef.current &&
-        Math.abs(velocityRef.current) < CONFIG.VELOCITY_THRESHOLD &&
-        timeSinceInteraction > autoPlayDelay;
-
-      if (shouldAutoPlay && !isAutoPlayingRef.current) {
-        isAutoPlayingRef.current = true;
+      // Phase 2 – auto-play check
+      const elapsed = now - e.lastInteractionTime;
+      if (
+        cfg.totalCards > 1 &&
+        !e.isPaused &&
+        !e.isHovered &&
+        !e.isDragging &&
+        !e.isPointerDown &&
+        Math.abs(e.velocity) < CONFIG.VELOCITY_THRESHOLD &&
+        elapsed > cfg.autoPlayDelay
+      ) {
+        e.isAutoPlaying = true;
       }
 
-      // Apply auto-play velocity
-      if (isAutoPlayingRef.current) {
-        velocityRef.current = autoPlaySpeed;
+      if (e.isAutoPlaying) e.velocity = cfg.autoPlaySpeed;
+
+      // Phase 3 – physics
+      e.scrollX = mod(e.scrollX + e.velocity * dt * 60, cfg.trackLength);
+      if (!e.isAutoPlaying) {
+        e.velocity *= CONFIG.FRICTION;
+        if (Math.abs(e.velocity) < CONFIG.VELOCITY_THRESHOLD) e.velocity = 0;
       }
 
-      // Update scroll position based on velocity
-      scrollXRef.current = mod(
-        scrollXRef.current + velocityRef.current * dt * 60,
-        trackLength
-      );
-
-      // Apply friction (only if not auto-playing)
-      if (!isAutoPlayingRef.current) {
-        velocityRef.current *= CONFIG.FRICTION;
-      }
-
-      // Clamp small velocities to zero (except during auto-play)
-      if (!isAutoPlayingRef.current && Math.abs(velocityRef.current) < CONFIG.VELOCITY_THRESHOLD) {
-        velocityRef.current = 0;
-      }
-
-      // Update card positions
+      // Phase 4 – update DOM
       updateCardPositions();
-
-      animationFrameRef.current = requestAnimationFrame(animate);
+      rafRef.current = requestAnimationFrame(animate);
     };
 
-    // Store animate function for resume
     animateFnRef.current = animate;
-
+    engine.current.lastTime = performance.now();
     animate();
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      if (rafRef.current !== undefined) cancelAnimationFrame(rafRef.current);
     };
-  }, [totalCards, trackLength, activeIndex, autoPlaySpeed, autoPlayDelay]);
+  }, [updateCardPositions]);
 
-  // Mouse wheel handler with smart scroll direction detection
+  // ── Initialisation ────────────────────────────────────────────────────────
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (isPausedRef.current) return;
+    const e    = engine.current;
+    const stage = stageRef.current;
 
-      // Detect scroll direction: horizontal vs vertical
-      const absDeltaX = Math.abs(e.deltaX);
-      const absDeltaY = Math.abs(e.deltaY);
+    if (totalCards <= 1) {
+      e.scrollX            = 0;
+      e.lastInteractionTime = performance.now();
+      return;
+    }
 
-      // Determine if this is a horizontal scroll intent:
-      // 1. Horizontal delta is greater than vertical (touchpad horizontal swipe)
-      // 2. Shift key is pressed (Shift+Wheel for carousel navigation)
-      const isHorizontalIntent =
-        (absDeltaX > absDeltaY * CONFIG.SCROLL_THRESHOLD) ||
-        e.shiftKey;
+    if (!stage) return;
+    const cx  = stage.offsetWidth / 2;
+    e.scrollX            = mod(-cx + cardWidth / 2, trackLength);
+    e.lastInteractionTime = performance.now();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-      // Only handle carousel interaction for horizontal scroll intent
-      if (isHorizontalIntent) {
-        e.preventDefault(); // Block default only for carousel interaction
-        targetCardIndexRef.current = null; // Clear auto-center on user scroll
+  useEffect(() => {
+    engine.current.prevPositions = [];
+  }, [totalCards]);
 
-        // Use deltaX if available (horizontal touchpad swipe), otherwise use deltaY with Shift
-        const scrollDelta = absDeltaX > 0 ? e.deltaX : e.deltaY;
-        velocityRef.current += scrollDelta * CONFIG.WHEEL_SENS;
-        resetInteractionTimer();
-      }
-      // Vertical scroll passes through to page (no preventDefault)
+  // ── Wheel handler ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onWheel = (ev: WheelEvent) => {
+      const e = engine.current;
+      if (e.isPaused) return;
+
+      const ax = Math.abs(ev.deltaX), ay = Math.abs(ev.deltaY);
+      const isHorizontal = ax > ay * CONFIG.SCROLL_THRESHOLD || ev.shiftKey;
+      if (!isHorizontal) return;
+
+      ev.preventDefault();
+      e.targetCardIndex   = null;
+      e.focusedCardIndex  = null;
+      e.isAutoPlaying     = false;
+      e.velocity         += (ax > 0 ? ev.deltaX : ev.deltaY) * CONFIG.WHEEL_SENS;
+      e.lastInteractionTime = performance.now();
     };
 
     const stage = stageRef.current;
-    if (stage) {
-      stage.addEventListener('wheel', handleWheel, { passive: false });
-    }
-
-    return () => {
-      if (stage) {
-        stage.removeEventListener('wheel', handleWheel);
-      }
-    };
+    stage?.addEventListener('wheel', onWheel, { passive: false });
+    return () => stage?.removeEventListener('wheel', onWheel);
   }, []);
 
-  // Mouse/Touch drag handlers
+  // ── Pointer handlers (mouse + touch) ────────────────────────────────────
+  //
+  // Key fix: mousedown does NOT enter drag mode immediately. It only records
+  // the start position. Drag mode activates when movement exceeds the threshold.
+  // This means a simple click (mousedown → mouseup with no/little movement)
+  // never triggers drag logic and the React onClick handler works normally.
+  //
   useEffect(() => {
-    const handleDragStart = (clientX: number) => {
-      if (isPausedRef.current) return;
-      targetCardIndexRef.current = null; // Clear auto-center on user drag
-      isDraggingRef.current = true;
-      dragStartRef.current = { x: clientX, scrollX: scrollXRef.current };
-      velocityRef.current = 0;
-      resetInteractionTimer();
+    const e = engine.current;
+
+    const pointerStart = (x: number) => {
+      if (e.isPaused) return;
+      e.isPointerDown       = true;
+      e.isDragging          = false;
+      e.wasDragging         = false;
+      e.pointerStartX       = x;
+      e.pointerStartScrollX = e.scrollX;
+      // Stop auto-play immediately on press so the carousel doesn't move
+      // while the user is about to interact.
+      e.isAutoPlaying       = false;
+      e.velocity            = 0;
+      e.lastInteractionTime = performance.now();
     };
 
-    const handleDragMove = (clientX: number) => {
-      if (!isDraggingRef.current || isPausedRef.current) return;
+    const pointerMove = (x: number) => {
+      if (!e.isPointerDown || e.isPaused) return;
+      const dx = e.pointerStartX - x;
 
-      const deltaX = dragStartRef.current.x - clientX;
-      scrollXRef.current = mod(
-        dragStartRef.current.scrollX + deltaX * CONFIG.DRAG_SENS,
-        trackLength
-      );
+      // Only enter drag mode once movement exceeds the threshold
+      if (!e.isDragging) {
+        if (Math.abs(dx) < CONFIG.DRAG_THRESHOLD) return;
+        // Entering drag mode: clear any click-to-centre target
+        e.isDragging       = true;
+        e.targetCardIndex  = null;
+        e.focusedCardIndex = null;
+      }
+
+      e.scrollX = mod(e.pointerStartScrollX + dx * CONFIG.DRAG_SENS, configRef.current.trackLength);
       updateCardPositions();
     };
 
-    const handleDragEnd = (clientX: number) => {
-      if (!isDraggingRef.current) return;
-      if (isPausedRef.current) return;
-
-      const deltaX = dragStartRef.current.x - clientX;
-      velocityRef.current = deltaX * CONFIG.DRAG_SENS * 0.5;
-
-      isDraggingRef.current = false;
-      resetInteractionTimer();
-    };
-
-    // Mouse events
-    const handleMouseDown = (e: MouseEvent) => {
-      handleDragStart(e.clientX);
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      handleDragMove(e.clientX);
-    };
-
-    const handleMouseUp = (e: MouseEvent) => {
-      handleDragEnd(e.clientX);
-    };
-
-    // Touch events
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        handleDragStart(e.touches[0].clientX);
+    const pointerEnd = (x: number) => {
+      if (!e.isPointerDown || e.isPaused) {
+        e.isPointerDown = false;
+        return;
       }
+
+      if (e.isDragging) {
+        // Real drag ended — apply fling velocity and suppress the next click
+        e.velocity    = (e.pointerStartX - x) * CONFIG.DRAG_SENS * 0.5;
+        e.wasDragging = true;
+        setTimeout(() => { e.wasDragging = false; }, 300);
+      }
+
+      e.isPointerDown = false;
+      e.isDragging    = false;
+      e.lastInteractionTime = performance.now();
     };
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        handleDragMove(e.touches[0].clientX);
-      }
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      if (e.changedTouches.length > 0) {
-        handleDragEnd(e.changedTouches[0].clientX);
-      }
-    };
+    const onMouseDown  = (ev: MouseEvent)  => pointerStart(ev.clientX);
+    const onMouseMove  = (ev: MouseEvent)  => pointerMove(ev.clientX);
+    const onMouseUp    = (ev: MouseEvent)  => pointerEnd(ev.clientX);
+    const onTouchStart = (ev: TouchEvent)  => { if (ev.touches[0])        pointerStart(ev.touches[0].clientX); };
+    const onTouchMove  = (ev: TouchEvent)  => { if (ev.touches[0])        pointerMove(ev.touches[0].clientX); };
+    const onTouchEnd   = (ev: TouchEvent)  => { if (ev.changedTouches[0]) pointerEnd(ev.changedTouches[0].clientX); };
 
     const stage = stageRef.current;
-    if (stage) {
-      stage.addEventListener('mousedown', handleMouseDown);
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-
-      stage.addEventListener('touchstart', handleTouchStart, { passive: true });
-      window.addEventListener('touchmove', handleTouchMove, { passive: true });
-      window.addEventListener('touchend', handleTouchEnd, { passive: true });
-    }
+    stage?.addEventListener('mousedown',  onMouseDown);
+    stage?.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('mousemove',  onMouseMove);
+    window.addEventListener('mouseup',    onMouseUp);
+    window.addEventListener('touchmove',  onTouchMove, { passive: true });
+    window.addEventListener('touchend',   onTouchEnd,  { passive: true });
 
     return () => {
-      if (stage) {
-        stage.removeEventListener('mousedown', handleMouseDown);
-      }
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
+      stage?.removeEventListener('mousedown',  onMouseDown);
+      stage?.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('mousemove',  onMouseMove);
+      window.removeEventListener('mouseup',    onMouseUp);
+      window.removeEventListener('touchmove',  onTouchMove);
+      window.removeEventListener('touchend',   onTouchEnd);
     };
-  }, [trackLength]);
+  }, [updateCardPositions]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isPausedRef.current) return;
-      targetCardIndexRef.current = null; // Clear auto-center on keyboard input
-      if (e.key === 'ArrowLeft') {
-        velocityRef.current -= 20;
-        resetInteractionTimer();
-      } else if (e.key === 'ArrowRight') {
-        velocityRef.current += 20;
-        resetInteractionTimer();
-      }
-    };
+  // ── Card interaction handlers ─────────────────────────────────────────────
 
-    window.addEventListener('keydown', handleKeyDown);
+  const handleCardClick = useCallback((index: number, event: React.MouseEvent) => {
+    const e = engine.current;
 
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    // Suppress the ghost click after a real drag
+    if (e.wasDragging) { e.wasDragging = false; return; }
+
+    // If this card is already the centred (active) card, let interactive
+    // children handle their own click. The inner wrapper has pointer-events
+    // auto so buttons/links receive the event directly. For non-interactive
+    // areas of the active card, we just ignore the click (no re-snap needed).
+    if (index === e.activeIndex) return;
+
+    // Non-centred card clicked → scroll it to centre
+    e.targetCardIndex  = index;
+    e.focusedCardIndex = index;
+    e.isAutoPlaying    = false;
+    e.lastInteractionTime = performance.now();
   }, []);
 
-  // Card hover handlers
-  const handleCardMouseEnter = (index: number) => {
-    if (isPausedRef.current) return;
-    isHoveredRef.current = true;
-    hoveredCardIndexRef.current = index;
-    velocityRef.current = 0; // Stop movement
-    resetInteractionTimer();
-  };
-
-  const handleCardMouseLeave = () => {
-    if (isPausedRef.current) return;
-    isHoveredRef.current = false;
-    hoveredCardIndexRef.current = null;
-    resetInteractionTimer();
-  };
-
-  // Reset previous positions when card count changes
-  useEffect(() => {
-    prevPositionsRef.current = [];
-  }, [totalCards]);
-
-  // Pre-warm GPU compositing
-  useEffect(() => {
-    updateCardPositions();
+  const handleCardMouseEnter = useCallback(() => {
+    const e = engine.current;
+    if (e.isPaused) return;
+    e.isHovered     = true;
+    e.isAutoPlaying = false;
+    e.velocity      = 0;
+    e.lastInteractionTime = performance.now();
   }, []);
 
+  const handleCardMouseLeave = useCallback(() => {
+    const e = engine.current;
+    if (e.isPaused) return;
+    e.isHovered = false;
+    e.lastInteractionTime = performance.now();
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
+    const e = engine.current;
+    if (e.isPaused) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+    event.preventDefault();
+    e.targetCardIndex  = null;
+    e.focusedCardIndex = null;
+    e.isAutoPlaying    = false;
+    e.lastInteractionTime = performance.now();
+    e.velocity += event.key === 'ArrowLeft' ? -20 : 20;
+  }, []);
+
+  // ── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div
       ref={stageRef}
-      className={`relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing ${className}`}
+      tabIndex={0}
+      className={`relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing focus:outline-none ${className}`}
       style={{
         perspective: `${CONFIG.PERSPECTIVE}px`,
-        contain: 'layout paint',
+        contain:     'layout paint',
+        touchAction: 'pan-y pinch-zoom',
       }}
+      onKeyDown={handleKeyDown}
+      onMouseEnter={handleCardMouseEnter}
+      onMouseLeave={handleCardMouseLeave}
       role="region"
       aria-label="3D Product Carousel"
-      aria-live="polite"
     >
       <div
         className="relative w-full h-full"
-        style={{
-          transformStyle: 'preserve-3d',
-        }}
+        style={{ transformStyle: 'preserve-3d', pointerEvents: 'none' }}
       >
         {children.map((child, index) => (
           <div
             key={index}
-            ref={(el) => {
-              if (el) cardsRef.current[index] = el;
-            }}
-            className="absolute top-1/2 left-0 -translate-y-1/2"
+            ref={(el) => { if (el) cardsRef.current[index] = el; }}
+            className="absolute top-1/2 left-0"
             style={{
-              width: `${cardWidth}px`,
+              width:          `${cardWidth}px`,
               transformStyle: 'preserve-3d',
-              willChange: 'transform, opacity',
-              pointerEvents: 'auto',
-              visibility: prevPositionsRef.current.length > 0 ? 'visible' : 'hidden',
-              opacity: prevPositionsRef.current.length > 0 ? 1 : 0,
-              transition: 'opacity 0.3s ease-out',
+              willChange:     'transform, opacity',
+              visibility:     'hidden',
+              pointerEvents:  'auto',
             }}
-            onClick={(e) => handleCardBackgroundClick(index, e)}
-            onMouseEnter={() => handleCardMouseEnter(index)}
-            onMouseLeave={handleCardMouseLeave}
+            onClick={(e)      => handleCardClick(index, e)}
           >
-            {child}
+            <div>
+              {child}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Accessibility: Announce active card */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
-        Viewing item {activeIndex + 1} of {totalCards}
-        {isAutoPlayingRef.current && ' - Auto-playing'}
+        Viewing item {reactiveActiveIndex + 1} of {totalCards}
       </div>
     </div>
   );

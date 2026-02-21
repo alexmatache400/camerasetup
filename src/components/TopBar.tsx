@@ -5,12 +5,34 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { Search, Moon, Sun, Menu } from "lucide-react";
 import MobileDrawer from "./MobileDrawer";
+import { useSidebarOffset } from "@/contexts/SidebarOffsetContext";
+
+function ThemeToggleButton({ current, next, setTheme }: {
+  current: string | undefined;
+  next: string;
+  setTheme: (theme: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="Toggle theme"
+      className="h-11 w-11 rounded-full border border-border bg-surface text-text-primary flex items-center justify-center hover:bg-accent hover:text-white hover:border-accent outline-none transition-all"
+      onClick={() => setTheme(next)}
+    >
+      {current === "dark" ? (
+        <Sun size={20} aria-hidden="true" />
+      ) : (
+        <Moon size={20} aria-hidden="true" />
+      )}
+    </button>
+  );
+}
 
 export default function TopBar() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
+  const { sidebarOffset } = useSidebarOffset();
   useEffect(() => setMounted(true), []);
 
   const current = mounted ? (resolvedTheme ?? theme) : "light";
@@ -18,13 +40,13 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-[150] bg-surface border-b border-border">
-      <div className="max-w-6xl mx-auto px-4">
+      <div className={`max-w-6xl mx-auto px-4 transition-all duration-300 ${sidebarOffset ? 'lg:pl-[210px]' : ''}`}>
         {/* DESKTOP: Original 3-column grid (≥768px) */}
         <div className="hidden md:grid grid-cols-3 items-center gap-4 h-16">
-          {/* Desktop Column 1: Brand */}
+          {/* Desktop Column 1: Brand — negative margin counteracts container shift so it stays at the left edge */}
           <Link
             href="/"
-            className="justify-self-start font-semibold tracking-wide cursor-pointer text-text-primary hover:opacity-75 transition-opacity outline-none"
+            className={`justify-self-start font-semibold tracking-wide cursor-pointer text-text-primary hover:opacity-75 transition-all duration-300 outline-none ${sidebarOffset ? 'lg:-ml-[210px]' : ''}`}
           >
             Camera setup
           </Link>
@@ -58,18 +80,7 @@ export default function TopBar() {
               />
             </form>
 
-            <button
-              type="button"
-              aria-label="Toggle theme"
-              className="h-11 w-11 rounded-full border border-border bg-surface text-text-primary flex items-center justify-center hover:bg-accent hover:text-white hover:border-accent outline-none transition-all"
-              onClick={() => setTheme(next)}
-            >
-              {current === "dark" ? (
-                <Sun size={20} aria-hidden="true" />
-              ) : (
-                <Moon size={20} aria-hidden="true" />
-              )}
-            </button>
+            <ThemeToggleButton current={current} next={next} setTheme={setTheme} />
           </div>
         </div>
 
@@ -86,18 +97,7 @@ export default function TopBar() {
           {/* Mobile Right: Theme + Hamburger */}
           <div className="flex items-center gap-2">
             {/* Theme Toggle */}
-            <button
-              type="button"
-              aria-label="Toggle theme"
-              className="h-11 w-11 rounded-full border border-border bg-surface text-text-primary flex items-center justify-center hover:bg-accent hover:text-white hover:border-accent outline-none transition-all"
-              onClick={() => setTheme(next)}
-            >
-              {current === "dark" ? (
-                <Sun size={20} aria-hidden="true" />
-              ) : (
-                <Moon size={20} aria-hidden="true" />
-              )}
-            </button>
+            <ThemeToggleButton current={current} next={next} setTheme={setTheme} />
 
             {/* Hamburger Menu */}
             <button

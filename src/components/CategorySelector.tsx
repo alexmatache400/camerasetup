@@ -1,11 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-
-interface Category {
-  name: string;
-  emoji: string;
-}
+import { getCategoryIcon } from './CategoryIcons';
+import type { Category } from '@/lib/supabase/queries';
 
 interface CategorySelectorProps {
   categories: Category[];
@@ -21,7 +18,7 @@ export default function CategorySelector({
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-6">
+    <div className="h-full overflow-y-auto px-4 py-6" style={{ scrollbarWidth: 'none' }}>
       <h2 className="text-lg font-semibold text-text-primary mb-4 text-center">
         Categories
       </h2>
@@ -41,9 +38,10 @@ export default function CategorySelector({
                 relative w-full h-20 rounded-xl
                 flex flex-col items-center justify-center gap-1
                 transition-all duration-300 ease-out
-                ${isSelected ? 'text-white scale-105' : 'text-text-primary hover:scale-102'}
+                ${isSelected ? 'scale-105' : 'text-text-primary hover:scale-102'}
               `}
               style={{
+                color: isSelected ? 'var(--text-primary)' : undefined,
                 background: isSelected ? 'var(--accent)' : 'color-mix(in srgb, var(--surface) 90%, transparent)',
                 border: isSelected ? '1px solid var(--accent)' : `1px solid ${isHovered && !isSelected ? 'var(--accent)' : 'var(--border)'}`,
                 boxShadow: isSelected
@@ -65,10 +63,17 @@ export default function CategorySelector({
                 />
               )}
 
-              {/* Emoji */}
-              <span className="text-3xl" role="img" aria-label={category.name}>
-                {category.emoji}
-              </span>
+              {/* Icon: SVG if available, emoji fallback */}
+              {(() => {
+                const Icon = getCategoryIcon(category.name);
+                return Icon ? (
+                  <Icon className="w-7 h-7" aria-label={category.name} />
+                ) : (
+                  <span className="text-3xl" role="img" aria-label={category.name}>
+                    {category.emoji}
+                  </span>
+                );
+              })()}
 
               {/* Category Name */}
               <span className={`
@@ -85,5 +90,3 @@ export default function CategorySelector({
   );
 }
 
-// Export the Category type for use in parent components
-export type { Category };

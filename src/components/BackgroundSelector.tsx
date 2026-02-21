@@ -1,153 +1,46 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
-import BottomSheet from './BottomSheet';
-
-export type BackgroundMedia = 'none' | 'sparkers' | 'magical-tree' | 'rainbow-nebula';
+import { ImageIcon } from 'lucide-react';
+import type { Background } from '@/lib/supabase/queries';
 
 interface BackgroundSelectorProps {
-  value: BackgroundMedia;
-  onChange: (value: BackgroundMedia) => void;
+  backgrounds: Background[];
+  value: string;
+  onChange: (value: string) => void;
 }
 
-const mediaOptions = [
-  { value: 'none' as BackgroundMedia, label: '--No background--' },
-  { value: 'sparkers' as BackgroundMedia, label: 'Sparkers' },
-  { value: 'magical-tree' as BackgroundMedia, label: 'Magical Tree' },
-  { value: 'rainbow-nebula' as BackgroundMedia, label: 'Rainbow Nebula' },
-];
+export default function BackgroundSelector({ backgrounds, value, onChange }: BackgroundSelectorProps) {
+  // Cycle: 'none' + each selectable background in DB order
+  const options = ['none', ...backgrounds.map(b => b.key)];
+  const currentLabel = backgrounds.find(b => b.key === value)?.label ?? 'No background';
 
-export default function BackgroundSelector({ value, onChange }: BackgroundSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const handleClick = () => {
+    const currentIndex = options.indexOf(value);
+    const nextIndex = (currentIndex + 1) % options.length;
+    onChange(options[nextIndex]);
+  };
 
-  // Mobile detection with resize listener
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Close dropdown when clicking outside (desktop only)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen && !isMobile) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen, isMobile]);
-
-  const selectedOption = mediaOptions.find(option => option.value === value) || mediaOptions[0];
+  const isActive = value !== 'none';
 
   return (
-    <>
-      <div
-        className="fixed z-50 top-32 left-2 right-2 md:top-40 md:right-4 md:left-auto md:max-w-xs hidden md:block"
-        ref={dropdownRef}
-      >
-        {/* Dropdown Button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 px-4 py-2.5 backdrop-blur-sm rounded-lg shadow-lg transition-all text-text-primary hover:shadow-xl max-md:w-full max-md:justify-between min-h-[44px]"
-          style={{
-            background: 'color-mix(in srgb, var(--surface) 90%, transparent)',
-            border: '1px solid var(--border)'
-          }}
-        >
-          <span className="text-sm font-medium truncate">
-            Background: {selectedOption.label}
-          </span>
-          <ChevronDown
-            className={`w-4 h-4 text-text-secondary transition-transform flex-shrink-0 ${
-              isOpen ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
-
-        {/* Desktop Dropdown Menu */}
-        {isOpen && (
-          <div className="hidden md:block absolute top-full right-0 mt-2 w-56 rounded-lg shadow-xl overflow-hidden" style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)'
-          }}>
-            {mediaOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className="w-full px-4 py-3 text-left text-sm transition-colors min-h-[44px]"
-                style={{
-                  background: value === option.value
-                    ? 'color-mix(in srgb, var(--accent) 10%, var(--surface))'
-                    : 'transparent',
-                  color: value === option.value
-                    ? 'var(--accent)'
-                    : 'var(--text-secondary)',
-                  fontWeight: value === option.value ? 500 : 400
-                }}
-                onMouseEnter={(e) => {
-                  if (value !== option.value) {
-                    e.currentTarget.style.background = 'var(--hover-overlay)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (value !== option.value) {
-                    e.currentTarget.style.background = 'transparent';
-                  }
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Mobile Bottom Sheet */}
-      <div className="md:hidden">
-        <BottomSheet
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          title="Select Background"
-        >
-          <div className="flex flex-col gap-2">
-            {mediaOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className="w-full px-4 py-3 text-left rounded-lg transition-all min-h-[44px]"
-                style={{
-                  background: value === option.value
-                    ? 'color-mix(in srgb, var(--accent) 15%, var(--surface))'
-                    : 'transparent',
-                  color: value === option.value
-                    ? 'var(--accent)'
-                    : 'var(--text-secondary)',
-                  fontWeight: value === option.value ? 600 : 400,
-                  border: value === option.value
-                    ? '2px solid var(--accent)'
-                    : '1px solid var(--border)'
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </BottomSheet>
-      </div>
-    </>
+    <button
+      onClick={handleClick}
+      title={`Background: ${currentLabel} (click to cycle)`}
+      className="fixed z-50 bottom-6 right-4 flex items-center justify-center w-11 h-11 rounded-full shadow-lg transition-all hover:shadow-xl hover:scale-105 active:scale-95"
+      style={{
+        background: isActive
+          ? 'color-mix(in srgb, var(--accent) 20%, var(--surface))'
+          : 'color-mix(in srgb, var(--surface) 90%, transparent)',
+        border: isActive
+          ? '1px solid var(--accent)'
+          : '1px solid var(--border)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <ImageIcon
+        className="w-5 h-5"
+        style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
+      />
+    </button>
   );
 }

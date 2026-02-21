@@ -27,10 +27,3 @@ export interface Activity {
   /** Optional description for the detail page */
   description?: string;
 }
-
-/**
- * Activity data structure from JSON
- */
-export interface ActivityData {
-  activities: Activity[];
-}

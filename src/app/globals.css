@@ -234,6 +234,16 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+/* Montserrat Font Utility */
+.font-montserrat {
+  font-family: var(--font-montserrat);
+}
+
+/* Accent Gradient Background */
+.bg-accent-gradient {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+}
+
 /* ============================================
    RESPONSIVE FLUID TYPOGRAPHY
    Scales smoothly across all viewport sizes

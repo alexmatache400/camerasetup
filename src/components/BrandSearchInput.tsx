@@ -122,7 +122,7 @@ export default function BrandSearchInput({
     <div className="relative w-full">
       {/* Label */}
       {label && (
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+        <label className="block text-sm font-medium mb-2 text-text-primary">
           {label}
         </label>
       )}
@@ -130,7 +130,7 @@ export default function BrandSearchInput({
       {/* Search Input */}
       <div className="relative">
         <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-          <Search className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
+          <Search className="w-5 h-5 text-text-tertiary" />
         </div>
 
         <input
@@ -145,14 +145,13 @@ export default function BrandSearchInput({
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full pl-10 pr-10 py-3 rounded-xl transition-all duration-300 outline-none"
+          className="w-full pl-10 pr-10 py-3 rounded-xl transition-all duration-300 outline-none text-text-primary"
           style={{
             background: 'color-mix(in srgb, var(--surface) 90%, transparent)',
             backdropFilter: 'blur(12px)',
             border: isOpen
               ? '2px solid var(--accent)'
               : '1px solid var(--border)',
-            color: 'var(--text-primary)',
           }}
         />
 
@@ -163,7 +162,7 @@ export default function BrandSearchInput({
             className="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
             type="button"
           >
-            <X className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
+            <X className="w-5 h-5 text-text-tertiary" />
           </button>
         )}
       </div>
@@ -172,11 +171,10 @@ export default function BrandSearchInput({
       {isOpen && allOptions.length > 0 && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-2 rounded-xl shadow-xl overflow-hidden"
+          className="absolute z-50 w-full mt-2 rounded-xl shadow-xl overflow-hidden border border-border"
           style={{
             background: 'color-mix(in srgb, var(--surface) 95%, transparent)',
             backdropFilter: 'blur(16px)',
-            border: '1px solid var(--border)',
             maxHeight: '280px',
             overflowY: 'auto',
           }}
@@ -213,7 +211,7 @@ export default function BrandSearchInput({
 
           {/* No results message */}
           {allOptions.length === 0 && (
-            <div className="px-4 py-6 text-center" style={{ color: 'var(--text-tertiary)' }}>
+            <div className="px-4 py-6 text-center text-text-tertiary">
               No brands found
             </div>
           )}
@@ -222,7 +220,7 @@ export default function BrandSearchInput({
 
       {/* Selected brand display */}
       {selectedBrand && !isOpen && (
-        <div className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <div className="mt-2 text-sm text-text-secondary">
           Selected: <span className="font-semibold">{selectedBrand}</span>
         </div>
       )}

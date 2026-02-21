@@ -1,266 +1,328 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo, memo } from "react";
-import useEmblaCarousel from "embla-carousel-react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useMemo, useRef, useState, useEffect, useCallback, memo } from "react";
 import Image from "next/image";
 import Badge3D from "./Badge3D";
 import type { Product } from "../types/product";
 
-// Configurable viewport coordinates - adjust these if alignment is off
-const VIEWPORT = {
-  // Outer screen bezel
-  screen: {
-    left: 186,
-    top: 44,
-    width: 308,
-    height: 228,
-    radius: 12,
-  },
-  // Active carousel viewport (inner visible area)
-  active: {
-    left: 146,
-    top: 125,
-    width: 385,
-    height: 200,
-    radius: 10,
-  },
-  // Bezel inset (distance between screen outer and active viewport)
-  inset: 6,
-};
-
-// Base dimensions
+// Base dimensions (used only for aspect ratio and scale calculation for badges/font)
 const BASE_WIDTH = 600;
 const BASE_HEIGHT = 850;
 
-// Configurable text and button positioning - adjust these as needed
-const TEXT_CONFIG = {
+/**
+ * Auto-fitting text that shrinks (via CSS scale) when the text is wider
+ * than its container. Never grows beyond 1× — only shrinks to fit.
+ * Uses a hidden measurement span so layout is not affected.
+ */
+function AutoFitText({
+  children,
+  className,
+  style,
+}: {
+  children: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [scaleX, setScaleX] = useState(1);
+
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    const text = textRef.current;
+    if (!container || !text) return;
+    // Subtract padding to get the actual available space for text
+    const cs = getComputedStyle(container);
+    const availableW = container.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const textW = text.scrollWidth;
+    if (textW > 0 && availableW > 0) {
+      setScaleX(Math.min(1, availableW / textW));
+    }
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [measure, children]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      style={{
+        ...style,
+        overflow: 'hidden',
+      }}
+    >
+      <span
+        ref={textRef}
+        style={{
+          display: 'inline-block',
+          transform: `scaleX(${scaleX})`,
+          transformOrigin: 'center',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {children}
+      </span>
+    </div>
+  );
+}
+
+function InfoDisplayButton({
+  label,
+  infoButtonSrc,
+  leftPercent,
+  topPercent,
+  widthPercent,
+  heightPercent,
+  scale,
+}: {
+  label: string;
+  infoButtonSrc: string;
+  leftPercent: number;
+  topPercent: number;
+  widthPercent: number;
+  heightPercent: number;
+  scale: number;
+}) {
+  return (
+    <div
+      className="absolute cursor-default hover:opacity-80 transition-opacity overflow-hidden"
+      style={{
+        left: `${leftPercent}%`,
+        top: `${topPercent}%`,
+        width: `${widthPercent}%`,
+        height: `${heightPercent}%`,
+        borderRadius: '15%',
+        zIndex: 31,
+      }}
+    >
+      <Image src={infoButtonSrc} alt={label} fill priority className="object-contain" />
+      <AutoFitText
+        className="absolute inset-0 flex items-center justify-center font-montserrat font-bold text-white"
+        style={{ fontSize: `clamp(7px, ${2 * scale}vw, 14px)`, padding: '0 6%' }}
+      >
+        {label}
+      </AutoFitText>
+    </div>
+  );
+}
+
+function InfoAmazonButton({
+  label,
+  infoButtonSrc,
+  leftPercent,
+  topPercent,
+  widthPercent,
+  heightPercent,
+  scale,
+  onClick,
+  clickDivLeft,
+}: {
+  label: string;
+  infoButtonSrc: string;
+  leftPercent: number;
+  topPercent: number;
+  widthPercent: number;
+  heightPercent: number;
+  scale: number;
+  onClick?: () => void;
+  clickDivLeft: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="absolute hover:opacity-80 transition-all outline-none active:scale-95 overflow-hidden"
+      style={{
+        left: `${leftPercent}%`,
+        top: `${topPercent}%`,
+        width: `${widthPercent}%`,
+        height: `${heightPercent}%`,
+        borderRadius: '15%',
+        zIndex: 31,
+        pointerEvents: 'none',
+      }}
+      aria-label={label}
+    >
+      <div
+        onClick={onClick}
+        className="absolute cursor-pointer"
+        style={{ left: clickDivLeft, top: 0, width: '50%', height: '100%', pointerEvents: 'auto', zIndex: 2 }}
+      />
+      <Image src={infoButtonSrc} alt={label} fill priority className="object-contain" style={{ pointerEvents: 'none' }} />
+      <AutoFitText
+        className="absolute inset-0 flex items-center justify-center font-montserrat font-bold text-white"
+        style={{ fontSize: `clamp(7px, ${2 * scale}vw, 14px)`, padding: '0 6%', pointerEvents: 'none' }}
+      >
+        {label}
+      </AutoFitText>
+    </button>
+  );
+}
+
+// All positions as percentages of the container (which has aspectRatio 600/850).
+// Derived from the base image (450×640): embossed slot edges detected via
+// row-brightness-difference analysis at the following y-positions:
+//   Info slots:   55.2% – 60.2%   (centre ≈ 57.7%)
+//   Main slot:    65.2% – 70.2%   (centre ≈ 67.7%)
+//   Amazon slots: 75.2% – 80.2%   (centre ≈ 77.7%)
+// Screen cutout:  x 24.2% – 88.7%,  y 12.5% – 41.4%
+const LAYOUT = {
+  // Product image viewport (the transparent screen cutout)
+  viewport: {
+    left: 24.2,      // % of width
+    top: 12.5,       // % of height
+    width: 64.5,     // % of width  (88.7 − 24.2)
+    height: 28.9,    // % of height (41.4 − 12.5)
+    borderRadius: 1.67, // % of width
+  },
+  // Camera name text
   cameraName: {
-    topMarginFromCarousel: 60, // 50 + 10px adjustment
+    top: 44.5,       // % of height – just below cutout bottom (41.4%) with small gap
   },
-  button: {
-    topMarginFromCameraName: 180, // margin from camera name text
-    width: 340, // default button width for scaling
-    height: 90, // default button height for scaling
-  },
+  // Info buttons row (top pair: "23 mpx" / "CMOS 1/24")
+  // Button image: 333×115 (AR 2.9:1). Container sized to match image AR so
+  // object-contain fills the box fully: 27%w → 6.55%h at card AR 600/850.
   infoButtons: {
-    width: 330, // width of each info button
-    height: 70, // height of each info button
-    gap: -120, // horizontal gap between the two buttons in each row (negative = visual overlap)
-    topMargin: 30, // margin from main button (for top row)
-    bottomMargin: 30, // margin from main button (for bottom row)
-    fontSize: 20, // font size for button text
+    top: 50,       // % of height – vertically centered on embossed slot (55.2–60.2)
+    width: 30,       // % of width (each button)
+    height: 15,    // % of height – matches button image AR at this width
+    leftOffset: 25,  // % of width (left edge of left button, inside card face)
+    rightOffset: 60, // % of width (left edge of right button)
+  },
+  // "See full description" button
+  // Button image: 477×118 (AR 4.04:1). 55%w → 9.6%h at card AR.
+  mainButton: {
+    top: 65,       // % of height – vertically centered on embossed slot (65.2–70.2)
+    width: 55,       // % of width
+    height: 9.6,     // % of height – matches button image AR at this width
+  },
+  // Amazon buttons row (bottom pair)
+  amazonButtons: {
+    top: 74.4,       // % of height – vertically centered on embossed slot (75.2–80.2)
+    width: 30,       // % of width (each button)
+    height: 15,    // % of height – matches button image AR at this width
+    leftOffset: 25,  // % of width (left edge of left button, inside card face)
+    rightOffset: 60, // % of width (left edge of right button)
+  },
+  // Badges row (above the card viewport)
+  badges: {
+    top: -1,        // % of height (kept inside card)
+    centerX: 51,   // % of width (center of badge row)
   },
 };
 
-/**
- * ProductCard Props Interface
- *
- * NOTE: The Product type (imported from ../types/product) contains additional filtering traits
- * that are not yet displayed in the ProductCard UI:
- * - compatibleCameras: string[] - Compatible camera models
- * - compatibleBrands: string[] - Compatible brands
- * - budget: "low" | "medium" | "high" - Price category
- * - isWaterproof: "yes" | "no" - Waterproof capability
- * - isShockproof: "yes" | "no" - Shockproof capability
- * - isCinemaOnly: "yes" | "no" - Cinema-only designation
- * - isFastShutterSpeed: "yes" | "no" - Fast shutter speed capability
- * - hasLens: "yes" | "no" - Whether the product includes a lens
- * - isOptional: "yes" | "no" - Whether the product is optional in a setup
- * - isKit: "yes" | "no" - Whether the product is sold as a kit/bundle
- *
- * These traits are available in the product data for future filtering/search functionality.
- * ProductCardProps only includes fields that are currently rendered in the UI.
- */
 interface ProductCardProps {
+  /** Pass a full Product object to auto-fill all product fields. Individual props override it. */
+  product?: Product;
   baseSrc?: string;
   slides?: string[];
-  viewport?: typeof VIEWPORT;
   className?: string;
   cameraName?: string;
-  textConfig?: typeof TEXT_CONFIG;
   buttonSrc?: string;
   onButtonClick?: () => void;
   infoButtonSrc?: string;
-  infoButtonMain?: string; // top left - display only
-  infoButtonSecondary?: string; // top right - display only, optional
-  infoButtonAmazonUK?: string; // bottom left - clickable, optional
-  infoButtonAmazonUS?: string; // bottom right - clickable, optional
+  infoButtonMain?: string;
+  infoButtonSecondary?: string;
+  infoButtonAmazonUK?: string;
+  infoButtonAmazonUS?: string;
   onAmazonUKClick?: () => void;
   onAmazonUSClick?: () => void;
-  // Modal data fields
   modalDescription?: string;
   modalSpecs?: { label: string; value: string }[];
   modalFeatures?: string[];
-  // 3D Badge fields
   badgeBrand?: string;
   badgeType?: string;
   badgePrice?: string;
-  // New product indicator
   isNew?: boolean;
-  // Container width control (prevents layout shift)
   containerWidth?: number;
 }
 
 function ProductCard({
-  baseSrc = "/productCardComponents/backgroundWhiteTheme/baseed.png",
-  slides = [
+  product,
+  baseSrc = product?.baseSrc ?? "/productCardComponents/backgroundWhiteTheme/baseed.png",
+  slides = product?.slides ?? [
     "/productCardComponents/backgroundWhiteTheme/s2.png",
     "/productCardComponents/backgroundWhiteTheme/slide-1.png"
   ],
-  viewport = VIEWPORT,
   className = "",
-  cameraName = "Sony A6400",
-  textConfig = TEXT_CONFIG,
-  buttonSrc = "/productCardComponents/backgroundWhiteTheme/see-full-description-button.png",
+  cameraName = product?.cameraName ?? "Sony A6400",
+  buttonSrc = product?.buttonSrc ?? "/productCardComponents/backgroundWhiteTheme/see-full-description-button.png",
   onButtonClick,
-  infoButtonSrc = "/productCardComponents/backgroundWhiteTheme/button-for-details.png",
-  infoButtonMain,
-  infoButtonSecondary,
-  infoButtonAmazonUK,
-  infoButtonAmazonUS,
+  infoButtonSrc = product?.infoButtonSrc ?? "/productCardComponents/backgroundWhiteTheme/button-for-details.png",
+  infoButtonMain = product?.infoButtonMain,
+  infoButtonSecondary = product?.infoButtonSecondary,
+  infoButtonAmazonUK = product?.infoButtonAmazonUK,
+  infoButtonAmazonUS = product?.infoButtonAmazonUS,
   onAmazonUKClick,
   onAmazonUSClick,
-  badgeBrand,
-  badgeType,
-  badgePrice,
-  isNew,
+  modalDescription = product?.modalDescription,
+  modalSpecs = product?.modalSpecs,
+  modalFeatures = product?.modalFeatures,
+  badgeBrand = product?.badgeBrand,
+  badgeType = product?.badgeType,
+  badgePrice = product?.badgePrice,
+  isNew = product?.isNew,
   containerWidth: controlledWidth,
 }: ProductCardProps) {
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
-  const [canScrollPrev, setCanScrollPrev] = useState(false);
-  const [canScrollNext, setCanScrollNext] = useState(false);
-  const [measuredWidth, setMeasuredWidth] = useState(BASE_WIDTH);
-  const [isMeasured, setIsMeasured] = useState(!!controlledWidth);
-
-  // Use controlled width if provided, otherwise use measured width
-  const containerWidth = controlledWidth ?? measuredWidth;
-
-  // Calculate scale factor for responsive sizing with minimum threshold
-  // Prevents text from becoming illegible on very small screens
-  const scale = useMemo(() => Math.max(0.6, containerWidth / BASE_WIDTH), [containerWidth]);
-
-  // Scaled viewport dimensions (memoized)
-  const scaledViewport = useMemo(() => ({
-    left: viewport.active.left * scale,
-    top: viewport.active.top * scale,
-    width: viewport.active.width * scale,
-    height: viewport.active.height * scale,
-    radius: viewport.active.radius * scale,
-  }), [scale, viewport]);
-
-  // Carousel navigation
-  const scrollPrev = useCallback(() => {
-    if (emblaApi) emblaApi.scrollPrev();
-  }, [emblaApi]);
-
-  const scrollNext = useCallback(() => {
-    if (emblaApi) emblaApi.scrollNext();
-  }, [emblaApi]);
-
-  // Update scroll button states
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setCanScrollPrev(emblaApi.canScrollPrev());
-    setCanScrollNext(emblaApi.canScrollNext());
-  }, [emblaApi]);
+  // Self-measuring: track the card's actual rendered width so badges
+  // scale proportionally with the card, exactly like the %-based buttons.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [measuredWidth, setMeasuredWidth] = useState<number>(0);
 
   useEffect(() => {
-    if (!emblaApi) return;
+    const el = cardRef.current;
+    if (!el) return;
 
-    // Defer initial call to avoid synchronous setState in effect
-    const timer = setTimeout(() => onSelect(), 0);
-
-    emblaApi.on("select", onSelect);
-    emblaApi.on("reInit", onSelect);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [emblaApi, onSelect]);
-
-  // Keyboard navigation - Disabled in 3D carousel context
-  // The parent 3D carousel handles arrow keys for navigation
-  // Individual card carousel navigation can be done via click/touch only
-
-  // Responsive container width tracking with debouncing
-  // Only runs if not in controlled mode (no prop provided)
-  useEffect(() => {
-    // Skip measurement if controlled width is provided
-    if (controlledWidth) return;
-
-    const updateWidth = () => {
-      const container = document.getElementById("product-card-container");
-      if (container) {
-        setMeasuredWidth(Math.min(container.offsetWidth, BASE_WIDTH));
-        setIsMeasured(true);
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
+        setMeasuredWidth(w);
       }
-    };
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-    updateWidth();
-
-    // Debounce resize events to prevent excessive re-renders
-    let resizeTimer: NodeJS.Timeout;
-    const handleResize = () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(updateWidth, 150);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      clearTimeout(resizeTimer);
-    };
-  }, [controlledWidth]);
+  // Scale factor derived from the card's actual width on screen.
+  // controlledWidth overrides the self-measured value when provided.
+  const scale = useMemo(() => {
+    const w = controlledWidth || measuredWidth || BASE_WIDTH;
+    return Math.max(0.4, w / BASE_WIDTH);
+  }, [controlledWidth, measuredWidth]);
 
   return (
     <div
-      id="product-card-container"
+      ref={cardRef}
       className={`relative w-full max-w-[640px] mx-auto ${className}`}
       style={{
         aspectRatio: `${BASE_WIDTH} / ${BASE_HEIGHT}`,
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
-        opacity: isMeasured ? 1 : 0,
-        transition: 'opacity 0.15s ease-in',
       }}
     >
-      {/* Layer 0: 3D Badges (z-40) */}
+      {/* Layer 0: 3D Badges */}
       {(badgeBrand || badgeType || badgePrice) && (
         <div
           className="absolute flex items-center justify-center"
           style={{
-            top: `${(viewport.active.top - 160) * scale}px`,
-            left: `${(viewport.active.left + viewport.active.width / 2) * scale}px`,
+            top: `${LAYOUT.badges.top}%`,
+            left: `${LAYOUT.badges.centerX}%`,
             transform: 'translateX(-50%)',
-            gap: `${35 * scale}px`,
+            gap: `${Math.max(4, Math.round(20 * scale))}px`,
             zIndex: 40,
           }}
         >
-          {badgeBrand && <Badge3D text={badgeBrand} variant="brand" scale={scale * 1.4} />}
-          {badgeType && <Badge3D text={badgeType} variant="type" scale={scale * 1.4} />}
-          {badgePrice && <Badge3D text={badgePrice} variant="price" scale={scale * 1.4} />}
+          {badgeBrand && <Badge3D text={badgeBrand} variant="brand" scale={scale * 1.9} />}
+          {badgeType && <Badge3D text={badgeType} variant="type" scale={scale * 1.9} />}
+          {badgePrice && <Badge3D text={badgePrice} variant="price" scale={scale * 1.9} />}
         </div>
       )}
 
-      {/* Layer 0.5: NEW Badge (z-45) */}
-      {/* Temporarily disabled */}
-      {/* {isNew && (
-        <div
-          className="absolute"
-          style={{
-            left: `${-20 * scale}px`,
-            top: `${1.7 * (viewport.active.top + viewport.active.height / 2) * scale}px`,
-            transform: 'translateY(-50%)',
-            height: `${50 * scale}px`,
-            zIndex: 45,
-          }}
-        >
-          <Badge3D text="NEW" variant="new" scale={scale * 1.4} vertical />
-        </div>
-      )} */}
-
-      {/* Layer 1: Base camera image (z-0) */}
+      {/* Layer 1: Base camera image */}
       <div className="absolute inset-0">
         <Image
           src={baseSrc}
@@ -271,85 +333,34 @@ function ProductCard({
         />
       </div>
 
-      {/* Layer 2: Carousel viewport (z-10) */}
+      {/* Layer 2: Product image (inside the screen cutout) */}
       <div
         className="absolute overflow-hidden"
         style={{
-          left: `${scaledViewport.left}px`,
-          top: `${scaledViewport.top}px`,
-          width: `${scaledViewport.width}px`,
-          height: `${scaledViewport.height}px`,
-          borderRadius: `${scaledViewport.radius}px`,
+          left: `${LAYOUT.viewport.left}%`,
+          top: `${LAYOUT.viewport.top}%`,
+          width: `${LAYOUT.viewport.width}%`,
+          height: `${LAYOUT.viewport.height}%`,
+          borderRadius: `${LAYOUT.viewport.borderRadius}%`,
           zIndex: 10,
         }}
       >
-        {/* Embla carousel container */}
-        <div ref={emblaRef} className="overflow-hidden h-full">
-          <div className="flex h-full">
-            {slides.map((slide, index) => (
-              <div
-                key={index}
-                className="flex-[0_0_100%] min-w-0 relative"
-                style={{ height: "100%" }}
-              >
-                <Image
-                  src={slide}
-                  alt={`Product slide ${index + 1}`}
-                  fill
-                  priority
-                  className="object-contain"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Layer 3: Arrow navigation (z-20) */}
-        <div
-          className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none"
-          style={{ zIndex: 20 }}
-        >
-          {/* Previous button */}
-          <button
-            type="button"
-            onClick={scrollPrev}
-            aria-label="Previous image"
-            disabled={!canScrollPrev && slides.length <= 1}
-            className="pointer-events-auto w-11 h-11 rounded-full border border-border flex items-center justify-center transition-all outline-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-            style={{
-              fontSize: `${14 * scale}px`,
-              background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
-              backdropFilter: 'blur(4px)'
-            }}
-          >
-            <ChevronLeft size={20} className="text-text-primary" />
-          </button>
-
-          {/* Next button */}
-          <button
-            type="button"
-            onClick={scrollNext}
-            aria-label="Next image"
-            disabled={!canScrollNext && slides.length <= 1}
-            className="pointer-events-auto w-11 h-11 rounded-full border border-border flex items-center justify-center transition-all outline-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-            style={{
-              fontSize: `${14 * scale}px`,
-              background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
-              backdropFilter: 'blur(4px)'
-            }}
-          >
-            <ChevronRight size={20} className="text-text-primary" />
-          </button>
-        </div>
+        <Image
+          src={slides[0]}
+          alt="Product image"
+          fill
+          priority
+          className="object-contain"
+        />
       </div>
 
       {/* Layer 4: Camera name text */}
       <div
         className="absolute font-montserrat font-bold text-white"
         style={{
-          left: `${scaledViewport.left}px`,
-          top: `${scaledViewport.top + scaledViewport.height + textConfig.cameraName.topMarginFromCarousel * scale}px`,
-          width: `${scaledViewport.width}px`,
+          left: `${LAYOUT.viewport.left}%`,
+          top: `${LAYOUT.cameraName.top}%`,
+          width: `${LAYOUT.viewport.width}%`,
           textAlign: 'center',
           zIndex: 30,
         }}
@@ -357,22 +368,42 @@ function ProductCard({
         {cameraName}
       </div>
 
-      {/* Layer 5: Main button image */}
+      {/* Layer 5: Top Left Info Button (Main) */}
+      {infoButtonMain && (
+        <InfoDisplayButton
+          label={infoButtonMain}
+          infoButtonSrc={infoButtonSrc}
+          leftPercent={LAYOUT.infoButtons.leftOffset}
+          topPercent={LAYOUT.infoButtons.top}
+          widthPercent={LAYOUT.infoButtons.width}
+          heightPercent={LAYOUT.infoButtons.height}
+          scale={scale}
+        />
+      )}
+
+      {/* Layer 5: Top Right Info Button (Secondary) */}
+      {infoButtonSecondary && (
+        <InfoDisplayButton
+          label={infoButtonSecondary}
+          infoButtonSrc={infoButtonSrc}
+          leftPercent={LAYOUT.infoButtons.rightOffset}
+          topPercent={LAYOUT.infoButtons.top}
+          widthPercent={LAYOUT.infoButtons.width}
+          heightPercent={LAYOUT.infoButtons.height}
+          scale={scale}
+        />
+      )}
+
+      {/* Layer 6: Main "See full description" button */}
       <button
         type="button"
         onClick={onButtonClick}
         className="absolute cursor-pointer hover:opacity-80 transition-all outline-none active:scale-95"
         style={{
-          left: `${scaledViewport.left + scaledViewport.width / 2 - (textConfig.button.width * scale / 2)}px`,
-          top: `${
-            scaledViewport.top +
-            scaledViewport.height +
-            textConfig.cameraName.topMarginFromCarousel * scale +
-            textConfig.button.topMarginFromCameraName * scale
-          }px`,
-          width: `${textConfig.button.width * scale}px`,
-          height: `${textConfig.button.height * scale}px`,
-          transformOrigin: "center",
+          left: `${(114 - LAYOUT.mainButton.width) / 2}%`,
+          top: `${LAYOUT.mainButton.top}%`,
+          width: `${LAYOUT.mainButton.width}%`,
+          height: `${LAYOUT.mainButton.height}%`,
           zIndex: 30,
         }}
         aria-label="See full description"
@@ -386,218 +417,40 @@ function ProductCard({
         />
       </button>
 
-      {/* Layer 6: Info buttons */}
-      {/* Top Left Info Button (Main) - Always displayed */}
-      {infoButtonMain && (
-        <div
-          className="absolute cursor-default hover:opacity-80 transition-opacity"
-          style={{
-            left: `${
-              scaledViewport.left +
-              scaledViewport.width / 2 -
-              textConfig.infoButtons.width * scale -
-              (textConfig.infoButtons.gap * scale) / 2
-            }px`,
-            top: `${
-              scaledViewport.top +
-              scaledViewport.height +
-              textConfig.cameraName.topMarginFromCarousel * scale +
-              textConfig.button.topMarginFromCameraName * scale -
-              textConfig.infoButtons.height * scale -
-              textConfig.infoButtons.topMargin * scale
-            }px`,
-            width: `${textConfig.infoButtons.width * scale}px`,
-            height: `${textConfig.infoButtons.height * scale}px`,
-            transformOrigin: "center",
-            zIndex: 31,
-          }}
-        >
-          <Image
-            src={infoButtonSrc}
-            alt={infoButtonMain}
-            fill
-            priority
-            className="object-contain"
-          />
-          <div
-            className="absolute inset-0 flex items-center justify-center font-montserrat font-bold text-white"
-            style={{
-              fontSize: `${textConfig.infoButtons.fontSize * scale}px`,
-            }}
-          >
-            {infoButtonMain}
-          </div>
-        </div>
-      )}
-
-      {/* Top Right Info Button (Secondary) - Optional */}
-      {infoButtonSecondary && (
-        <div
-          className="absolute cursor-default hover:opacity-80 transition-opacity"
-          style={{
-            left: `${
-              scaledViewport.left +
-              scaledViewport.width / 2 +
-              (textConfig.infoButtons.gap * scale) / 2
-            }px`,
-            top: `${
-              scaledViewport.top +
-              scaledViewport.height +
-              textConfig.cameraName.topMarginFromCarousel * scale +
-              textConfig.button.topMarginFromCameraName * scale -
-              textConfig.infoButtons.height * scale -
-              textConfig.infoButtons.topMargin * scale
-            }px`,
-            width: `${textConfig.infoButtons.width * scale}px`,
-            height: `${textConfig.infoButtons.height * scale}px`,
-            transformOrigin: "center",
-            zIndex: 31,
-          }}
-        >
-          <Image
-            src={infoButtonSrc}
-            alt={infoButtonSecondary}
-            fill
-            priority
-            className="object-contain"
-          />
-          <div
-            className="absolute inset-0 flex items-center justify-center font-montserrat font-bold text-white"
-            style={{
-              fontSize: `${textConfig.infoButtons.fontSize * scale}px`,
-            }}
-          >
-            {infoButtonSecondary}
-          </div>
-        </div>
-      )}
-
-      {/* Bottom Left Info Button (Amazon UK) - Optional, Clickable */}
+      {/* Layer 7: Bottom Left Info Button (Amazon UK) */}
       {infoButtonAmazonUK && (
-        <button
-          type="button"
-          className="absolute hover:opacity-80 transition-all outline-none active:scale-95"
-          style={{
-            left: `${
-              scaledViewport.left +
-              scaledViewport.width / 2 -
-              textConfig.infoButtons.width * scale -
-              (textConfig.infoButtons.gap * scale) / 2
-            }px`,
-            top: `${
-              scaledViewport.top +
-              scaledViewport.height +
-              textConfig.cameraName.topMarginFromCarousel * scale +
-              textConfig.button.topMarginFromCameraName * scale +
-              textConfig.button.height * scale +
-              textConfig.infoButtons.bottomMargin * scale
-            }px`,
-            width: `${textConfig.infoButtons.width * scale}px`,
-            height: `${textConfig.infoButtons.height * scale}px`,
-            transformOrigin: "center",
-            zIndex: 31,
-            pointerEvents: 'none',
-          }}
-          aria-label={infoButtonAmazonUK}
-        >
-          {/* Hit area overlay - LEFT HALF ONLY */}
-          <div
-            onClick={onAmazonUKClick}
-            className="absolute cursor-pointer"
-            style={{
-              left: 0,
-              top: 0,
-              width: '50%',
-              height: '100%',
-              pointerEvents: 'auto',
-              zIndex: 2,
-            }}
-          />
-          <Image
-            src={infoButtonSrc}
-            alt={infoButtonAmazonUK}
-            fill
-            priority
-            className="object-contain"
-            style={{ pointerEvents: 'none' }}
-          />
-          <div
-            className="absolute inset-0 flex items-center justify-center font-montserrat font-bold text-white"
-            style={{
-              fontSize: `${textConfig.infoButtons.fontSize * scale}px`,
-              pointerEvents: 'none',
-            }}
-          >
-            {infoButtonAmazonUK}
-          </div>
-        </button>
+        <InfoAmazonButton
+          label={infoButtonAmazonUK}
+          infoButtonSrc={infoButtonSrc}
+          leftPercent={LAYOUT.amazonButtons.leftOffset}
+          topPercent={LAYOUT.amazonButtons.top}
+          widthPercent={LAYOUT.amazonButtons.width}
+          heightPercent={LAYOUT.amazonButtons.height}
+          scale={scale}
+          onClick={onAmazonUKClick}
+          clickDivLeft="0"
+        />
       )}
 
-      {/* Bottom Right Info Button (Amazon US) - Optional, Clickable */}
+      {/* Layer 7: Bottom Right Info Button (Amazon US) */}
       {infoButtonAmazonUS && (
-        <button
-          type="button"
-          className="absolute hover:opacity-80 transition-all outline-none active:scale-95"
-          style={{
-            left: `${
-              scaledViewport.left +
-              scaledViewport.width / 2 +
-              (textConfig.infoButtons.gap * scale) / 2
-            }px`,
-            top: `${
-              scaledViewport.top +
-              scaledViewport.height +
-              textConfig.cameraName.topMarginFromCarousel * scale +
-              textConfig.button.topMarginFromCameraName * scale +
-              textConfig.button.height * scale +
-              textConfig.infoButtons.bottomMargin * scale
-            }px`,
-            width: `${textConfig.infoButtons.width * scale}px`,
-            height: `${textConfig.infoButtons.height * scale}px`,
-            transformOrigin: "center",
-            zIndex: 31,
-            pointerEvents: 'none',
-          }}
-          aria-label={infoButtonAmazonUS}
-        >
-          {/* Hit area overlay - RIGHT HALF ONLY */}
-          <div
-            onClick={onAmazonUSClick}
-            className="absolute cursor-pointer"
-            style={{
-              left: '50%',
-              top: 0,
-              width: '50%',
-              height: '100%',
-              pointerEvents: 'auto',
-              zIndex: 2,
-            }}
-          />
-          <Image
-            src={infoButtonSrc}
-            alt={infoButtonAmazonUS}
-            fill
-            priority
-            className="object-contain"
-            style={{ pointerEvents: 'none' }}
-          />
-          <div
-            className="absolute inset-0 flex items-center justify-center font-montserrat font-bold text-white"
-            style={{
-              fontSize: `${textConfig.infoButtons.fontSize * scale}px`,
-              pointerEvents: 'none',
-            }}
-          >
-            {infoButtonAmazonUS}
-          </div>
-        </button>
+        <InfoAmazonButton
+          label={infoButtonAmazonUS}
+          infoButtonSrc={infoButtonSrc}
+          leftPercent={LAYOUT.amazonButtons.rightOffset}
+          topPercent={LAYOUT.amazonButtons.top}
+          widthPercent={LAYOUT.amazonButtons.width}
+          heightPercent={LAYOUT.amazonButtons.height}
+          scale={scale}
+          onClick={onAmazonUSClick}
+          clickDivLeft="50%"
+        />
       )}
     </div>
   );
 }
 
-// Memoize component to prevent unnecessary re-renders
 export default memo(ProductCard);
 
-// Export viewport and text config constants for reuse
-export { VIEWPORT, BASE_WIDTH, BASE_HEIGHT, TEXT_CONFIG };
+// Export constants for reuse by other components
+export { BASE_WIDTH, BASE_HEIGHT, LAYOUT };

@@ -69,53 +69,14 @@ export interface Product {
    */
   budget: "low" | "medium" | "high";
 
-  /**
-   * Waterproof/water-resistant capability
-   * "yes" or "no" - strict binary choice
-   */
-  isWaterproof: "yes" | "no";
-
-  /**
-   * Shockproof/impact-resistant capability
-   * "yes" or "no" - strict binary choice
-   */
-  isShockproof: "yes" | "no";
-
-  /**
-   * Cinema-only designation (specialized for video/cinema production)
-   * "yes" or "no" - strict binary choice
-   */
-  isCinemaOnly: "yes" | "no";
-
-  /**
-   * Fast shutter speed capability (for action/sports photography)
-   * "yes" or "no" - strict binary choice
-   */
-  isFastShutterSpeed: "yes" | "no";
-
-  /**
-   * Whether the camera/product includes a lens
-   * "yes" or "no" - strict binary choice
-   */
-  hasLens: "yes" | "no";
-
-  /**
-   * Whether the product is optional in a setup
-   * "yes" or "no" - strict binary choice
-   */
-  isOptional: "yes" | "no";
-
-  /**
-   * Whether the product is sold as a kit/bundle
-   * "yes" or "no" - strict binary choice
-   */
-  isKit: "yes" | "no";
-
-  /**
-   * Whether the product is a DSLR camera
-   * "yes" or "no" - strict binary choice
-   */
-  isDSLR: "yes" | "no";
+  isWaterproof: boolean;
+  isShockproof: boolean;
+  isCinemaOnly: boolean;
+  isFastShutterSpeed: boolean;
+  hasLens: boolean;
+  isOptional: boolean;
+  isKit: boolean;
+  isDSLR: boolean;
 
   /**
    * Camera type designation for cinema/photography setup wizards
@@ -124,11 +85,4 @@ export interface Product {
    * - "both": Compatible with both types or type doesn't apply (e.g., lenses, accessories)
    */
   cameraType?: "mirrorless" | "dslr" | "both";
-}
-
-/**
- * Type for the products.json file structure
- */
-export interface ProductsData {
-  products: Product[];
 }

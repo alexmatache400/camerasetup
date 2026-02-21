@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation';
 import SceneSetup from './SceneSetup';
 import ActivityCard3D from './ActivityCard3D';
 import CameraController from './CameraController';
-import activitiesData from '@/data/activities.json';
-import type { Activity, ActivityData } from '@/types/activity';
+import type { Activity } from '@/types/activity';
 
 /**
  * ActivityScene3D Component
@@ -15,7 +14,7 @@ import type { Activity, ActivityData } from '@/types/activity';
  * Main 3D scene component that manages the Canvas, activities, and interactions.
  * Handles selection state, navigation, and scroll gestures.
  */
-export default function ActivityScene3D() {
+export default function ActivityScene3D({ activities }: { activities: Activity[] }) {
   const router = useRouter();
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -30,8 +29,6 @@ export default function ActivityScene3D() {
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const zoomThreshold = 300; // pixels to scroll to reach 100% zoom
-
-  const { activities } = activitiesData as ActivityData;
 
   // Detect mobile device
   useEffect(() => {

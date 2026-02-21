@@ -19,6 +19,48 @@ interface KitComponent {
   product: Product;
 }
 
+function WizardRadioOption({
+  label,
+  value,
+  isSelected,
+  onChange,
+  accentColor,
+}: {
+  label: string;
+  value: string;
+  isSelected: boolean;
+  onChange: () => void;
+  accentColor: string;
+}) {
+  return (
+    <label
+      key={value}
+      className="flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300"
+      style={{
+        background: isSelected
+          ? `linear-gradient(to right, ${accentColor}, ${accentColor}dd)`
+          : 'color-mix(in srgb, var(--surface) 80%, transparent)',
+        backdropFilter: 'blur(12px)',
+        border: isSelected ? 'none' : '1px solid var(--border)',
+        color: isSelected ? 'white' : 'var(--text-primary)',
+        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+        boxShadow: isSelected ? `0 8px 24px ${accentColor}4d` : 'none',
+      }}
+    >
+      <input type="radio" checked={isSelected} onChange={onChange} className="sr-only" />
+      <div
+        className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all"
+        style={{ borderColor: isSelected ? 'white' : 'var(--border)' }}
+      >
+        {isSelected && (
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'white' }} />
+        )}
+      </div>
+      <span className="font-medium">{label}</span>
+    </label>
+  );
+}
+
 export default function CinemaWizard({ products, activityColor = '#e85a24' }: CinemaWizardProps) {
   // Wizard selections
   const [selectedBudget, setSelectedBudget] = useState<BudgetLevel | null>(null);
@@ -31,7 +73,7 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
   const availableBrands = useMemo(() => {
     const brandSet = new Set<string>();
     products.forEach(product => {
-      if (product.isCinemaOnly === 'yes') {
+      if (product.isCinemaOnly) {
         product.compatibleBrands?.forEach(brand => brandSet.add(brand.trim()));
       }
     });
@@ -107,7 +149,7 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
   ): Product[] => {
     return products.filter(product => {
       // Must be cinema product
-      if (product.isCinemaOnly !== 'yes') return false;
+      if (!product.isCinemaOnly) return false;
 
       // Budget filter
       if (product.budget !== selectedBudget) return false;
@@ -131,7 +173,7 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
 
       // Category filter (based on badgeType)
       if (categoryFilter === 'Camera Body') {
-        return product.badgeType === 'Digital Camera' && product.hasLens === 'no';
+        return product.badgeType === 'Digital Camera' && !product.hasLens;
       }
       if (categoryFilter === 'Lens') {
         return product.badgeType === 'Lenses';
@@ -203,7 +245,7 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Progress Bar */}
       <div>
-        <div className="flex justify-between text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
+        <div className="flex justify-between text-sm mb-2 text-text-secondary">
           <span>Progress</span>
           <span>{progress}%</span>
         </div>
@@ -228,49 +270,20 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
         </h3>
         <div className="grid gap-3 sm:grid-cols-3">
           {(['low', 'medium', 'high'] as BudgetLevel[]).map((budget) => {
-            const labels = {
+            const labels: Record<BudgetLevel, string> = {
               low: 'Hobbyist',
               medium: 'Enthusiast',
-              high: 'Professional'
+              high: 'Professional',
             };
-            const isSelected = selectedBudget === budget;
-
             return (
-              <label
+              <WizardRadioOption
                 key={budget}
-                className="flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300"
-                style={{
-                  background: isSelected
-                    ? `linear-gradient(to right, ${activityColor}, ${activityColor}dd)`
-                    : 'color-mix(in srgb, var(--surface) 80%, transparent)',
-                  backdropFilter: 'blur(12px)',
-                  border: isSelected ? 'none' : '1px solid var(--border)',
-                  color: isSelected ? 'white' : 'var(--text-primary)',
-                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                  boxShadow: isSelected ? `0 8px 24px ${activityColor}4d` : 'none',
-                }}
-              >
-                <input
-                  type="radio"
-                  checked={isSelected}
-                  onChange={() => handleBudgetSelect(budget)}
-                  className="sr-only"
-                />
-                <div
-                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all"
-                  style={{
-                    borderColor: isSelected ? 'white' : 'var(--border)',
-                  }}
-                >
-                  {isSelected && (
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ background: 'white' }}
-                    />
-                  )}
-                </div>
-                <span className="font-medium">{labels[budget]}</span>
-              </label>
+                value={budget}
+                label={labels[budget]}
+                isSelected={selectedBudget === budget}
+                onChange={() => handleBudgetSelect(budget)}
+                accentColor={activityColor}
+              />
             );
           })}
         </div>
@@ -284,49 +297,20 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
           </h3>
           <div className="grid gap-3 sm:grid-cols-3">
             {(['mirrorless', 'dslr', 'any'] as CameraType[]).map((type) => {
-              const labels = {
+              const labels: Record<CameraType, string> = {
                 mirrorless: 'Mirrorless',
                 dslr: 'DSLR',
-                any: 'Does not matter'
+                any: 'Does not matter',
               };
-              const isSelected = selectedCameraType === type;
-
               return (
-                <label
+                <WizardRadioOption
                   key={type}
-                  className="flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300"
-                  style={{
-                    background: isSelected
-                      ? `linear-gradient(to right, ${activityColor}, ${activityColor}dd)`
-                      : 'color-mix(in srgb, var(--surface) 80%, transparent)',
-                    backdropFilter: 'blur(12px)',
-                    border: isSelected ? 'none' : '1px solid var(--border)',
-                    color: isSelected ? 'white' : 'var(--text-primary)',
-                    transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                    boxShadow: isSelected ? `0 8px 24px ${activityColor}4d` : 'none',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    checked={isSelected}
-                    onChange={() => handleCameraTypeSelect(type)}
-                    className="sr-only"
-                  />
-                  <div
-                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all"
-                    style={{
-                      borderColor: isSelected ? 'white' : 'var(--border)',
-                    }}
-                  >
-                    {isSelected && (
-                      <div
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ background: 'white' }}
-                      />
-                    )}
-                  </div>
-                  <span className="font-medium">{labels[type]}</span>
-                </label>
+                  value={type}
+                  label={labels[type]}
+                  isSelected={selectedCameraType === type}
+                  onChange={() => handleCameraTypeSelect(type)}
+                  accentColor={activityColor}
+                />
               );
             })}
           </div>
@@ -365,18 +349,16 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
 
       {/* Step 5: Kit Recommendation (visible when kit is generated) */}
       {kit.length > 0 && (
-        <div className="mt-12 pt-8 border-t animate-fadeIn" style={{ borderColor: 'var(--border)' }}>
+        <div className="mt-12 pt-8 border-t border-border animate-fadeIn">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold" style={{ color: 'white', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
               Your Recommended Cinema Kit
             </h2>
             <button
               onClick={resetWizard}
-              className="px-4 py-2 rounded-lg transition-all hover:opacity-80"
+              className="px-4 py-2 rounded-lg transition-all hover:opacity-80 border border-border text-text-secondary"
               style={{
                 background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-secondary)',
               }}
             >
               Reset Configuration
@@ -388,11 +370,10 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
             {kit.map((component, index) => (
               <div
                 key={`${component.category}-${component.product.id}`}
-                className="p-6 rounded-xl"
+                className="p-6 rounded-xl border border-border"
                 style={{
                   background: 'color-mix(in srgb, var(--surface) 90%, transparent)',
                   backdropFilter: 'blur(12px)',
-                  border: '1px solid var(--border)',
                 }}
               >
                 <div className="flex items-center justify-between mb-4">
@@ -406,7 +387,7 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
                     >
                       {component.category}
                     </span>
-                    <h3 className="text-xl font-semibold mt-2" style={{ color: 'var(--text-primary)' }}>
+                    <h3 className="text-xl font-semibold mt-2 text-text-primary">
                       {component.product.cameraName}
                     </h3>
                   </div>
@@ -427,19 +408,7 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
                 <div className="mt-4 flex justify-center">
                   <div style={{ maxWidth: '400px', width: '100%' }}>
                     <ProductCard
-                      baseSrc={component.product.baseSrc}
-                      slides={component.product.slides}
-                      cameraName={component.product.cameraName}
-                      buttonSrc={component.product.buttonSrc}
-                      infoButtonSrc={component.product.infoButtonSrc}
-                      infoButtonMain={component.product.infoButtonMain}
-                      infoButtonSecondary={component.product.infoButtonSecondary}
-                      infoButtonAmazonUK={component.product.infoButtonAmazonUK}
-                      infoButtonAmazonUS={component.product.infoButtonAmazonUS}
-                      badgeBrand={component.product.badgeBrand}
-                      badgeType={component.product.badgeType}
-                      badgePrice={component.product.badgePrice}
-                      isNew={component.product.isNew}
+                      product={component.product}
                       containerWidth={400}
                     />
                   </div>
@@ -457,10 +426,10 @@ export default function CinemaWizard({ products, activityColor = '#e85a24' }: Ci
                 border: `1px solid ${activityColor}4d`,
               }}
             >
-              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <div className="text-sm text-text-secondary">
                 Estimated Total Kit Price
               </div>
-              <div className="text-2xl font-bold" style={{ color: 'var(--accent)' }}>
+              <div className="text-2xl font-bold text-accent">
                 Contact for pricing
               </div>
             </div>

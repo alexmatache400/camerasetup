@@ -1,29 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useCallback, useState } from 'react';
+import useEmblaCarousel from 'embla-carousel-react';
+import Image from 'next/image';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Button3D from './Button3D';
+import { useModalBehavior } from '@/hooks/useModalBehavior';
+import { CloseButton } from './CloseButton';
 
-/**
- * ModalData Interface
- *
- * NOTE: The Product type (from @/types/product) contains additional filtering traits
- * that are not currently displayed in the modal but are available in the product data:
- * - compatibleCameras: string[] - Compatible camera models
- * - compatibleBrands: string[] - Compatible brands
- * - budget: "low" | "medium" | "high" - Price category
- * - isWaterproof: "yes" | "no" - Waterproof capability
- * - isShockproof: "yes" | "no" - Shockproof capability
- * - isCinemaOnly: "yes" | "no" - Cinema-only designation
- * - isFastShutterSpeed: "yes" | "no" - Fast shutter speed capability
- * - hasLens: "yes" | "no" - Whether the product includes a lens
- * - isOptional: "yes" | "no" - Whether the product is optional in a setup
- * - isKit: "yes" | "no" - Whether the product is sold as a kit/bundle
- *
- * These traits can be added to the modal UI in the future if needed.
- */
 export interface ModalData {
   cameraName: string;
+  slides?: string[];
   description?: string;
   features?: string[];
   specs?: { label: string; value: string }[];
@@ -38,89 +25,147 @@ interface ProductModalProps {
   data: ModalData;
 }
 
-export default function ProductModal({ isOpen, onClose, data }: ProductModalProps) {
-  // Close on ESC key
+function CarouselArrowButton({ direction, onClick }: {
+  direction: 'prev' | 'next';
+  onClick: () => void;
+}) {
+  const isPrev = direction === 'prev';
+  return (
+    <button
+      onClick={onClick}
+      aria-label={isPrev ? 'Previous image' : 'Next image'}
+      className={`absolute ${isPrev ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-all hover:opacity-90 active:scale-95 border border-border`}
+      style={{ background: 'color-mix(in srgb, var(--surface) 85%, transparent)', backdropFilter: 'blur(8px)' }}
+    >
+      {isPrev ? <ChevronLeft size={20} className="text-text-primary" /> : <ChevronRight size={20} className="text-text-primary" />}
+    </button>
+  );
+}
+
+function ModalCarousel({ slides }: { slides: string[] }) {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const scrollTo = useCallback((index: number) => emblaApi?.scrollTo(index), [emblaApi]);
+
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
+    if (!emblaApi) return;
+    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
+    emblaApi.on('select', onSelect);
+    emblaApi.on('reInit', onSelect);
+    return () => { emblaApi.off('select', onSelect); emblaApi.off('reInit', onSelect); };
+  }, [emblaApi]);
 
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden';
-    }
+  if (slides.length === 0) return null;
 
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen, onClose]);
+  return (
+    <div className="w-full mb-6">
+      <div className="relative">
+        {/* Carousel track */}
+        <div ref={emblaRef} className="overflow-hidden rounded-xl">
+          <div className="flex">
+            {slides.map((src, i) => (
+              <div key={i} className="flex-[0_0_100%] min-w-0 relative" style={{ height: '320px' }}>
+                <Image
+                  src={src}
+                  alt={`Product image ${i + 1}`}
+                  fill
+                  priority={i === 0}
+                  className="object-contain"
+                  style={{ background: 'color-mix(in srgb, var(--surface) 60%, transparent)' }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Arrows — only show if more than one slide */}
+        {slides.length > 1 && (
+          <>
+            <CarouselArrowButton direction="prev" onClick={scrollPrev} />
+            <CarouselArrowButton direction="next" onClick={scrollNext} />
+          </>
+        )}
+      </div>
+
+      {/* Dot indicators */}
+      {slides.length > 1 && (
+        <div className="flex justify-center gap-2 mt-3">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => scrollTo(i)}
+              aria-label={`Go to image ${i + 1}`}
+              className="w-2 h-2 rounded-full transition-all"
+              style={{
+                background: i === selectedIndex ? 'var(--accent)' : 'var(--border)',
+                transform: i === selectedIndex ? 'scale(1.3)' : 'scale(1)',
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ProductModal({ isOpen, onClose, data }: ProductModalProps) {
+  useModalBehavior(isOpen, onClose);
 
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-4 max-md:p-0"
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      style={{ padding: '89px 16px 25px' }}
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 backdrop-blur-xl" style={{
-        background: 'var(--overlay)'
-      }} />
+      <div className="absolute inset-0 backdrop-blur-xl" style={{ background: 'var(--overlay)' }} />
 
-      {/* Modal Card */}
+      {/* Modal Card — full height within the padding */}
       <div
-        className="relative w-full max-w-3xl max-md:max-w-none max-md:h-full max-md:flex max-md:flex-col backdrop-blur-2xl rounded-2xl max-md:rounded-none shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className="relative w-full max-w-3xl h-full flex flex-col backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'color-mix(in srgb, var(--surface) 90%, transparent)',
-          border: '1px solid var(--border)',
-          boxShadow: '0 25px 50px -12px var(--shadow-strong)'
+          boxShadow: '0 25px 50px -12px var(--shadow-strong)',
         }}
       >
         {/* Header */}
-        <div className="sticky top-0 backdrop-blur-md border-b px-6 py-4 flex items-center justify-between z-10" style={{
-          background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
-          borderColor: 'var(--border)'
-        }}>
+        <div
+          className="sticky top-0 backdrop-blur-md border-b border-border px-6 py-4 flex items-center justify-between z-10 shrink-0"
+          style={{
+            background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
+          }}
+        >
           <h2 className="text-fluid-2xl font-bold text-gradient-accent font-montserrat">
             {data.cameraName}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full transition-colors text-text-secondary hover:text-accent"
-            style={{
-              background: 'var(--hover-overlay)'
-            }}
-            aria-label="Close modal"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <CloseButton onClick={onClose} size="lg" ariaLabel="Close modal" />
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-6 md:max-h-[70vh] md:overflow-y-auto max-md:flex-1 max-md:overflow-y-auto">
+        {/* Content — scrollable, fills remaining space */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          {/* Image carousel */}
+          {data.slides && data.slides.length > 0 && (
+            <ModalCarousel slides={data.slides} />
+          )}
+
           {/* Description Section */}
           {data.description && (
             <div className="mb-6">
-              <h3 className="text-fluid-lg font-semibold text-gradient-accent mb-3">
-                Description
-              </h3>
-              <p className="text-text-secondary leading-relaxed">
-                {data.description}
-              </p>
+              <h3 className="text-fluid-lg font-semibold text-gradient-accent mb-3">Description</h3>
+              <p className="text-text-secondary leading-relaxed">{data.description}</p>
             </div>
           )}
 
           {/* Technical Specifications Section */}
           {data.specs && data.specs.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-fluid-lg font-semibold text-gradient-accent mb-3">
-                Technical Specifications
-              </h3>
+              <h3 className="text-fluid-lg font-semibold text-gradient-accent mb-3">Technical Specifications</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {data.specs.map((spec, index) => (
                   <div
@@ -128,17 +173,13 @@ export default function ProductModal({ isOpen, onClose, data }: ProductModalProp
                     className="backdrop-blur-sm rounded-lg p-3"
                     style={{
                       background: 'color-mix(in srgb, var(--accent) 8%, var(--surface))',
-                      border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)'
+                      border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
                     }}
                   >
-                    <div className="text-sm font-medium" style={{
-                      color: 'var(--accent)'
-                    }}>
+                    <div className="text-sm font-medium text-accent">
                       {spec.label}
                     </div>
-                    <div className="text-base font-semibold text-text-primary mt-1">
-                      {spec.value}
-                    </div>
+                    <div className="text-base font-semibold text-text-primary mt-1">{spec.value}</div>
                   </div>
                 ))}
               </div>
@@ -148,16 +189,11 @@ export default function ProductModal({ isOpen, onClose, data }: ProductModalProp
           {/* Key Features Section */}
           {data.features && data.features.length > 0 && (
             <div>
-              <h3 className="text-fluid-lg font-semibold text-gradient-accent mb-3">
-                Key Features
-              </h3>
+              <h3 className="text-fluid-lg font-semibold text-gradient-accent mb-3">Key Features</h3>
               <ul className="space-y-2">
                 {data.features.map((feature, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-2 text-text-secondary"
-                  >
-                    <span className="text-xl mt-0.5" style={{color: 'var(--accent)'}}>•</span>
+                  <li key={index} className="flex items-start gap-2 text-text-secondary">
+                    <span className="text-xl mt-0.5 text-accent">•</span>
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -167,42 +203,24 @@ export default function ProductModal({ isOpen, onClose, data }: ProductModalProp
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 backdrop-blur-md border-t px-6 py-4 flex items-center justify-between gap-4 z-10" style={{
-          background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
-          borderColor: 'var(--border)'
-        }}>
+        <div
+          className="sticky bottom-0 backdrop-blur-md border-t border-border px-6 py-4 flex items-center justify-between gap-4 z-10 shrink-0"
+          style={{
+            background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
+          }}
+        >
           {/* Amazon Buttons */}
           <div className="grid grid-cols-2 md:flex md:flex-row gap-x-2 gap-y-4 md:gap-3 w-full md:w-auto [&>*:last-child:nth-child(odd)]:col-span-2 [&>*:last-child:nth-child(odd)]:justify-self-center">
-            {data.amazonUKLink && (
-              <Button3D
-                text="Amazon UK"
-                href={data.amazonUKLink}
-                scale={0.85}
-              />
-            )}
-            {data.amazonUSLink && (
-              <Button3D
-                text="Amazon US"
-                href={data.amazonUSLink}
-                scale={0.85}
-              />
-            )}
-            {data.amazonDELink && (
-              <Button3D
-                text="Amazon DE"
-                href={data.amazonDELink}
-                scale={0.85}
-              />
-            )}
+            {data.amazonUKLink && <Button3D text="Amazon UK" href={data.amazonUKLink} scale={0.85} />}
+            {data.amazonUSLink && <Button3D text="Amazon US" href={data.amazonUSLink} scale={0.85} />}
+            {data.amazonDELink && <Button3D text="Amazon DE" href={data.amazonDELink} scale={0.85} />}
           </div>
 
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="px-6 py-2.5 text-white font-medium rounded-lg transition-all hover:opacity-90"
-            style={{
-              background: 'color-mix(in srgb, var(--text-secondary) 80%, transparent)'
-            }}
+            className="px-6 py-2.5 text-white font-medium rounded-lg transition-all hover:opacity-90 shrink-0"
+            style={{ background: 'color-mix(in srgb, var(--text-secondary) 80%, transparent)' }}
           >
             Close
           </button>
